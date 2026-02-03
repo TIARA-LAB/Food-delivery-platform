@@ -1,43 +1,44 @@
 import express from 'express';
 import cors from 'cors';
-import prisma from './config/db.js'
+import { config } from './config/index.js';
+import { logInfo } from './utils/logger.js';
+import authRoutes from './routes/authRoutes.js';
+import { handleError } from './utils/error.js';
+import helmet from 'helmet';
 
 const app = express();
 
-//Global Middlewares
-app.use(cors());
-app.use(express.json());
+// Security middleware
+app.use(helmet());
+app.use(cors(config.cors));
 
-//Health Check / DB Test
-app.get('/', async (req, res) => {
- try {
-  // Simple query to check MySQL connection
-  const result = await prisma.$queryRaw`SELECT NOW() AS server_time;`;
+// Body parsing
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Health check
+app.get('/health', (req, res) => {
   res.json({
-   message: 'Food Ordering API is running',
-   mysqlServerTime: result[0].server_time,
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: config.nodeEnv
   });
- } catch (err) {
-  console.error('DB connection failed:', err);
-  res.status(500).json({
-   message: 'DB connection failed',
-   error: err.message,
-  });
- }
 });
 
-// 404 Handler
-app.use((req, res) => {
- res.status(404).json({ message: 'Route not found' });
+// Routes 
+app.use('/api/auth', authRoutes);
+
+app.use((req, res, next) => {
+  const err = new Error(`Route ${req.originalUrl} not found`);
+  err.statusCode = 404;
+  err.isOperational = true;
+  next(err);
 });
 
-// Global Error Handler
-app.use((err, req, res, next) => {
- console.error(err);
- const statusCode = err.statusCode || 500;
- res.status(statusCode).json({
-  message: err.message || 'Internal server error',
- });
-});
+// Global error handler 
+app.use(handleError);
+
+const port = config.port || 3000;
+logInfo(`Server starting on port ${port}`);
 
 export default app;
