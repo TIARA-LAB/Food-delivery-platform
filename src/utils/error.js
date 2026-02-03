@@ -9,11 +9,27 @@ export class AppError extends Error {
 }
 
 export const handleError = (err, req, res, next) => {
- // Set default values
+ // 🚨 DEVELOPMENT MODE: Show FULL error details
+ if (process.env.NODE_ENV === 'development') {
+  console.error('🚨 FULL ERROR DETAILS:', {
+   message: err.message,
+   stack: err.stack,
+   statusCode: err.statusCode,
+   name: err.name
+  });
+
+  return res.status(err.statusCode || 500).json({
+   status: err.status || 'error',
+   message: err.message,
+   ...(err.stack && { stack: err.stack }),  // Show stack trace
+   errorName: err.name
+  });
+ }
+
+ // PRODUCTION MODE: Hide sensitive details
  err.statusCode = err.statusCode || 500;
  err.status = err.status || 'error';
 
- // Operational errors (trusted error: send message to client)
  if (err.isOperational) {
   return res.status(err.statusCode).json({
    status: err.status,
@@ -21,7 +37,6 @@ export const handleError = (err, req, res, next) => {
   });
  }
 
- // Programming or other unknown error: don't leak error details
  res.status(500).json({
   status: 'error',
   message: 'Internal server error'

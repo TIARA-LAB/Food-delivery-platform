@@ -1,7 +1,8 @@
+import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../utils/error.js';
 import { config } from '../config/index.js';
-import { logInfo, logWarn, logError } from '../utils/logger.js'; 
+import { logError } from '../utils/logger.js';
 
 export const authenticateToken = async (req, res, next) => {
  try {
@@ -16,7 +17,7 @@ export const authenticateToken = async (req, res, next) => {
   req.user = decoded;
   next();
  } catch (error) {
-  logger.logError('Token verification failed:', error);
+  logError('Token verification failed:', error);
   next(new AppError('Invalid token', 401));
  }
 };
@@ -30,14 +31,14 @@ export const authorizeRoles = (...roles) => {
  };
 };
 
-// Express-validator middleware
 export const validateRequest = (validations) => {
  return async (req, res, next) => {
   await Promise.all(validations.map(validation => validation.run(req)));
 
-  const errors = req.errors || [];
-  if (errors.length > 0) {
-   const errorMessages = errors.map(err => err.msg).join(', ');
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+   const errorMessages = errors.array().map(err => err.msg).join(', ');
    throw new AppError(errorMessages, 400);
   }
   next();

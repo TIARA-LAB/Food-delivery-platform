@@ -1,7 +1,7 @@
 import { hashPassword, verifyPassword } from '../utils/hash.js';
 import { generateTokens } from '../utils/token.js';
 import EmailService from './emailService.js';
-import { logInfo, logWarn, logError } from '../utils/logger.js';  
+import { logInfo, logWarn, logError } from '../utils/logger.js';
 import { AuthRepository } from '../repository/authRepository.js';
 import { AppError } from '../utils/error.js';
 import jwt from 'jsonwebtoken';
@@ -22,30 +22,34 @@ export class AuthService {
     }
 
     const hashedPassword = await hashPassword(password);
-    const user = await this.repository.create({ 
-      email, 
-      password: hashedPassword, 
-      name, 
-      role 
+    const user = await this.repository.create({
+      email,
+      password: hashedPassword,
+      name,
+      role
     });
 
+    //  AUTO-VERIFY USER (emailVerified = true)
+    await this.repository.updateEmailVerified(user.id, true);
+
     const { accessToken, refreshToken } = await generateTokens({
-      id: user.id, 
-      email: user.email, 
-      role: user.role 
+      id: user.id,
+      email: user.email,
+      role: user.role
     });
 
     await this.repository.updateRefreshToken(user.id, refreshToken);
 
+    // Email still sent (optional)
     try {
       await EmailService.sendVerificationEmail(user.id, user.email);
-      logInfo(`Verification email sent to: ${email}`);
+      logInfo(`Welcome email sent to: ${email}`);
     } catch (emailError) {
-      logWarn(`Failed to send verification email to ${email}:`, emailError);
+      logWarn(`Failed to send welcome email to ${email}:`, emailError);
     }
 
     return {
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, emailVerified: true },
       accessToken,
       refreshToken,
       emailSent: true
@@ -59,20 +63,17 @@ export class AuthService {
       throw new AppError('Invalid credentials', 401);
     }
 
-    if (!user.emailVerified) {
-      throw new AppError('Please verify your email before logging in', 403);
-    }
-
+    //  No email verification check needed (auto-verified)
     const { accessToken, refreshToken } = await generateTokens({
-      id: user.id, 
-      email: user.email, 
-      role: user.role 
+      id: user.id,
+      email: user.email,
+      role: user.role
     });
 
     await this.repository.updateRefreshToken(user.id, refreshToken);
 
     return {
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, emailVerified: user.emailVerified },
       accessToken,
       refreshToken
     };
