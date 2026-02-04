@@ -45,6 +45,8 @@ model User {
   phone      String?     @unique
   role       Role        @default(CUSTOMER)
   isActive   Boolean     @default(true)
+  refreshToken String?
+  emailVerified Boolean @default(false)
   addresses  Address[]
   orders     Order[]
   reviews    Review[]
