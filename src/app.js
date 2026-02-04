@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config/index.js';
 import { logInfo } from './utils/logger.js';
 import authRoutes from './routes/authRoutes.js';
+import vendorRoutes from './routes/vendorRoutes.js';
 import { handleError } from './utils/error.js';
 import helmet from 'helmet';
 
@@ -27,6 +28,8 @@ app.get('/health', (req, res) => {
 
 // Routes 
 app.use('/api/auth', authRoutes);
+app.use('/api/vendor', vendorRoutes);
+
 
 app.use((req, res, next) => {
   const err = new Error(`Route ${req.originalUrl} not found`);

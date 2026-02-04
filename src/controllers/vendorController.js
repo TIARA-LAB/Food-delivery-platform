@@ -1,4 +1,4 @@
-import { VendorService } from '../services/vendorService.js';
+import { VendorService } from '../service/vendorService.js'
 import { validationResult } from 'express-validator';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
 export class VendorController {

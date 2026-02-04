@@ -1,10 +1,7 @@
 import prisma from '../config/db.js';
 import { logError } from '../utils/logger.js'
 
-const prisma = new PrismaClient({
- log: ['warn', 'error'],
- errorFormat: 'pretty'
-});
+
 
 export class VendorRepository {
 

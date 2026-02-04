@@ -1,7 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { vendorController } from '../controllers/vendorController.js';
-import { vendorAuthMiddleware } from './middleware/vendorAuth.js';
+import { vendorAuthMiddleware } from '../middlewares/vendorMiddleware.js'
 import {
  // RESTAURANT OPERATIONS
  getRestaurantValidation,
@@ -20,7 +20,7 @@ import {
  // ANALYTICS & REVIEWS
  getAnalyticsValidation,
  getReviewsValidation
-} from './validation/vendorValidation.js';
+} from '../validation/vendorValidation.js'
 import { logInfo } from '../utils/logger.js';
 
 const router = express.Router();
