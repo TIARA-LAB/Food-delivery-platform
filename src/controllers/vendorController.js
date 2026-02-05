@@ -1,17 +1,16 @@
 import { VendorService } from '../service/vendorService.js'
 import { validationResult } from 'express-validator';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
+
 export class VendorController {
  constructor() {
   this.vendorService = new VendorService();
  }
 
  // RESTAURANT OPERATIONS
-
  async getRestaurant(req, res) {
   try {
    const vendorId = req.user.id;
-
    logInfo('VendorController:getRestaurant', { vendorId });
 
    const restaurant = await this.vendorService.getRestaurant(vendorId);
@@ -24,6 +23,7 @@ export class VendorController {
    this.handleError(req, res, error, 'getRestaurant');
   }
  }
+
  async updateRestaurant(req, res) {
   try {
    const errors = validationResult(req);
@@ -32,9 +32,12 @@ export class VendorController {
    }
 
    const vendorId = req.user.id;
-   logInfo('VendorController:updateRestaurant', { vendorId });
 
-   const result = await this.vendorService.updateRestaurant(vendorId, req.body);
+   // ✅ SAFE: Ensure req.body exists
+   const updateData = req.body || {};
+   logInfo('VendorController:updateRestaurant', { vendorId, updates: Object.keys(updateData) });
+
+   const result = await this.vendorService.updateRestaurant(vendorId, updateData);
 
    res.status(200).json({
     success: true,
@@ -54,11 +57,21 @@ export class VendorController {
    }
 
    const vendorId = req.user.id;
-   const { isActive } = req.body;
+
+   // ✅ FIXED: Safe destructuring with validation
+   const body = req.body || {};
+   const { isActive } = body;
+
+   if (typeof isActive === 'undefined') {
+    return res.status(400).json({
+     success: false,
+     message: 'isActive field is required (true/false)'
+    });
+   }
 
    logInfo('VendorController:toggleRestaurantStatus', { vendorId, isActive });
 
-   const result = await this.vendorService.toggleRestaurantStatus(vendorId, isActive);
+   const result = await this.vendorService.toggleRestaurantStatus(vendorId, Boolean(isActive));
 
    res.status(200).json({
     success: true,
@@ -79,9 +92,21 @@ export class VendorController {
    }
 
    const vendorId = req.user.id;
-   const scheduleData = req.body;
+   const scheduleData = req.body || {};
 
-   logInfo('VendorController:upsertSchedule', { vendorId, dayOfWeek: scheduleData.dayOfWeek });
+   // ✅ Validate required fields
+   if (!scheduleData.dayOfWeek || !scheduleData.opensAt || !scheduleData.closesAt) {
+    return res.status(400).json({
+     success: false,
+     message: 'dayOfWeek, opensAt, and closesAt are required'
+    });
+   }
+
+   logInfo('VendorController:upsertSchedule', {
+    vendorId,
+    dayOfWeek: scheduleData.dayOfWeek,
+    opensAt: scheduleData.opensAt
+   });
 
    const result = await this.vendorService.upsertSchedule(vendorId, scheduleData);
 
@@ -103,9 +128,19 @@ export class VendorController {
    }
 
    const vendorId = req.user.id;
-   logInfo('VendorController:createClosure', { vendorId });
+   const closureData = req.body || {};
 
-   const result = await this.vendorService.createClosure(vendorId, req.body);
+   // ✅ Validate required fields
+   if (!closureData.startDate || !closureData.endDate) {
+    return res.status(400).json({
+     success: false,
+     message: 'startDate and endDate are required'
+    });
+   }
+
+   logInfo('VendorController:createClosure', { vendorId, startDate: closureData.startDate });
+
+   const result = await this.vendorService.createClosure(vendorId, closureData);
 
    res.status(201).json({
     success: true,
@@ -117,8 +152,7 @@ export class VendorController {
   }
  }
 
- //MENU OPERATIONS 
-
+ // MENU OPERATIONS 
  async createMenuCategory(req, res) {
   try {
    const errors = validationResult(req);
@@ -127,9 +161,19 @@ export class VendorController {
    }
 
    const vendorId = req.user.id;
-   logInfo('VendorController:createMenuCategory', { vendorId });
+   const categoryData = req.body || {};
 
-   const result = await this.vendorService.createMenuCategory(vendorId, req.body);
+   // ✅ Validate required field
+   if (!categoryData.name) {
+    return res.status(400).json({
+     success: false,
+     message: 'name is required for menu category'
+    });
+   }
+
+   logInfo('VendorController:createMenuCategory', { vendorId, name: categoryData.name });
+
+   const result = await this.vendorService.createMenuCategory(vendorId, categoryData);
 
    res.status(201).json({
     success: true,
@@ -140,6 +184,7 @@ export class VendorController {
    this.handleError(req, res, error, 'createMenuCategory');
   }
  }
+
  async createFoodItem(req, res) {
   try {
    const errors = validationResult(req);
@@ -149,10 +194,19 @@ export class VendorController {
 
    const vendorId = req.user.id;
    const { categoryId } = req.params;
+   const itemData = req.body || {};
 
-   logInfo('VendorController:createFoodItem', { vendorId, categoryId });
+   // ✅ Validate required fields
+   if (!itemData.name || !itemData.price) {
+    return res.status(400).json({
+     success: false,
+     message: 'name and price are required for food item'
+    });
+   }
 
-   const result = await this.vendorService.createFoodItem(vendorId, categoryId, req.body);
+   logInfo('VendorController:createFoodItem', { vendorId, categoryId, name: itemData.name });
+
+   const result = await this.vendorService.createFoodItem(vendorId, categoryId, itemData);
 
    res.status(201).json({
     success: true,
@@ -163,6 +217,7 @@ export class VendorController {
    this.handleError(req, res, error, 'createFoodItem');
   }
  }
+
  async updateFoodItem(req, res) {
   try {
    const errors = validationResult(req);
@@ -172,10 +227,11 @@ export class VendorController {
 
    const vendorId = req.user.id;
    const { foodId } = req.params;
+   const updateData = req.body || {};
 
-   logInfo('VendorController:updateFoodItem', { vendorId, foodId });
+   logInfo('VendorController:updateFoodItem', { vendorId, foodId, updates: Object.keys(updateData) });
 
-   const result = await this.vendorService.updateFoodItem(vendorId, foodId, req.body);
+   const result = await this.vendorService.updateFoodItem(vendorId, foodId, updateData);
 
    res.status(200).json({
     success: true,
@@ -187,8 +243,7 @@ export class VendorController {
   }
  }
 
- //ORDER MANAGEMENT
-
+ // ORDER MANAGEMENT
  async getOrders(req, res) {
   try {
    const vendorId = req.user.id;
@@ -211,6 +266,7 @@ export class VendorController {
    this.handleError(req, res, error, 'getOrders');
   }
  }
+
  async updateOrderStatus(req, res) {
   try {
    const errors = validationResult(req);
@@ -220,7 +276,17 @@ export class VendorController {
 
    const vendorId = req.user.id;
    const { orderId } = req.params;
-   const { status } = req.body;
+
+   // ✅ SAFE: Ensure status exists
+   const body = req.body || {};
+   const { status } = body;
+
+   if (!status) {
+    return res.status(400).json({
+     success: false,
+     message: 'status field is required'
+    });
+   }
 
    logInfo('VendorController:updateOrderStatus', { vendorId, orderId, status });
 
@@ -236,8 +302,7 @@ export class VendorController {
   }
  }
 
- //ANALYTICS & REPORTS
-
+ // ANALYTICS & REPORTS
  async getAnalytics(req, res) {
   try {
    const vendorId = req.user.id;
@@ -259,6 +324,7 @@ export class VendorController {
    this.handleError(req, res, error, 'getAnalytics');
   }
  }
+
  async getReviews(req, res) {
   try {
    const vendorId = req.user.id;
@@ -292,8 +358,7 @@ export class VendorController {
   }
  }
 
- //UTILITY METHODS
-
+ // UTILITY METHODS
  validationError(errors, res) {
   const errorDetails = errors.array();
   logWarn('VendorController:validationError', {
@@ -310,6 +375,7 @@ export class VendorController {
    }))
   });
  }
+
  handleError(req, res, error, operation) {
   const vendorId = req?.user?.id || 'unknown';
 

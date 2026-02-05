@@ -7,6 +7,10 @@ import { validateRequest } from '../middlewares/authMiddleware.js';
 const authService = new AuthService();
 
 export const register = async (req, res, next) => {
+ // 🔍 DEBUG LOGS - REMOVE AFTER TESTING
+ console.log('🔍 RAW BODY:', JSON.stringify(req.body, null, 2));
+ console.log('🔍 CONTENT-TYPE:', req.headers['content-type']);
+
  try {
   const { email, password, name, role } = req.body;
   const result = await authService.register(email, password, name, role);
@@ -75,7 +79,7 @@ export const verifyEmail = async (req, res, next) => {
  }
 };
 
-
+// Validation middleware attachment
 register.validate = validateRequest(registerValidation);
 login.validate = validateRequest(loginValidation);
 resendVerification.validate = validateRequest(resendVerificationValidation);
