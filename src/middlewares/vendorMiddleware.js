@@ -124,19 +124,5 @@ export class VendorAuthMiddleware {
   }
 }
 
-// ✅ EXPRESS ROUTER USAGE - PERFECT STACK ALIGNMENT
-/*
-GET /vendor/restaurant
-  VendorAuthMiddleware.auth,                    // JWT → req.user.id
-  VendorAuthMiddleware.requireActiveRestaurant, // 1 restaurant exists
-  VendorValidation.getRestaurantValidation(),
-  vendorController.getRestaurant
-
-PATCH /vendor/orders/:orderId/status
-  VendorAuthMiddleware.auth,                    // JWT → req.user.id  
-  VendorAuthMiddleware.requireVendorOrder,      // Owns this order
-  VendorValidation.updateOrderStatusValidation(),
-  vendorController.updateOrderStatus
-*/
 export const vendorAuthMiddleware = VendorAuthMiddleware;
 export default VendorAuthMiddleware;

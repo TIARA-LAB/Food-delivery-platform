@@ -37,8 +37,6 @@ export class VendorRepository {
    }
   }
  }
-
- // ✅ MISSING: Get Vendor by ID (for auth middleware)
  async getVendorById(vendorId) {
   try {
    const vendor = await prisma.vendor.findUnique({
@@ -273,7 +271,6 @@ export class VendorRepository {
   }
  }
 
- // ✅ MISSING: Get Order by ID (for auth middleware)
  async getOrderById(vendorId, orderId) {
   try {
    const order = await prisma.order.findFirst({

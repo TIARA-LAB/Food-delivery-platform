@@ -1,15 +1,47 @@
-import { VendorService } from '../service/vendorService.js'
+import { VendorService } from '../service/vendorService.js';
 import { validationResult } from 'express-validator';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
+import { AppError } from '../utils/error.js';
 
 export class VendorController {
  constructor() {
   this.vendorService = new VendorService();
  }
 
+ // Safe body parser middleware
+ safeBodyParser(req, res, next) {
+  req.body = req.body || {};
+  next();
+ }
+
  // RESTAURANT OPERATIONS
- async getRestaurant(req, res) {
+ async createRestaurant(req, res, next) {
   try {
+   if (!req.user?.id) {
+    return next(new AppError('Vendor authentication required', 401));
+   }
+
+   const vendorId = req.user.id;
+   logInfo('VendorController:createRestaurant', { vendorId });
+
+   const result = await this.vendorService.createRestaurant(vendorId);
+
+   res.status(201).json({
+    success: true,
+    message: 'Restaurant created successfully',
+    data: result
+   });
+  } catch (error) {
+   this.handleError(req, res, error, 'createRestaurant');
+  }
+ }
+
+ async getRestaurant(req, res, next) {
+  try {
+   if (!req.user?.id) {
+    return next(new AppError('Vendor authentication required', 401));
+   }
+
    const vendorId = req.user.id;
    logInfo('VendorController:getRestaurant', { vendorId });
 
@@ -24,18 +56,24 @@ export class VendorController {
   }
  }
 
- async updateRestaurant(req, res) {
+ async updateRestaurant(req, res, next) {
   try {
+   if (!req.body || Object.keys(req.body).length === 0) {
+    return next(new AppError('No update data provided', 400));
+   }
+
    const errors = validationResult(req);
    if (!errors.isEmpty()) {
     return this.validationError(errors, res);
    }
 
    const vendorId = req.user.id;
+   const updateData = req.body;
 
-   // ✅ SAFE: Ensure req.body exists
-   const updateData = req.body || {};
-   logInfo('VendorController:updateRestaurant', { vendorId, updates: Object.keys(updateData) });
+   logInfo('VendorController:updateRestaurant', {
+    vendorId,
+    updates: Object.keys(updateData)
+   });
 
    const result = await this.vendorService.updateRestaurant(vendorId, updateData);
 
@@ -49,59 +87,51 @@ export class VendorController {
   }
  }
 
- async toggleRestaurantStatus(req, res) {
+ async toggleRestaurantStatus(req, res, next) {
   try {
+   const vendorId = req.user.id;
+   const body = req.body || {};
+
+   if (typeof body.isActive === 'undefined') {
+    return next(new AppError('isActive field is required (true/false)', 400));
+   }
+
    const errors = validationResult(req);
    if (!errors.isEmpty()) {
     return this.validationError(errors, res);
    }
 
-   const vendorId = req.user.id;
+   logInfo('VendorController:toggleRestaurantStatus', { vendorId, isActive: body.isActive });
 
-   // ✅ FIXED: Safe destructuring with validation
-   const body = req.body || {};
-   const { isActive } = body;
-
-   if (typeof isActive === 'undefined') {
-    return res.status(400).json({
-     success: false,
-     message: 'isActive field is required (true/false)'
-    });
-   }
-
-   logInfo('VendorController:toggleRestaurantStatus', { vendorId, isActive });
-
-   const result = await this.vendorService.toggleRestaurantStatus(vendorId, Boolean(isActive));
+   const result = await this.vendorService.toggleRestaurantStatus(vendorId, Boolean(body.isActive));
 
    res.status(200).json({
     success: true,
     data: result,
-    message: `Restaurant ${isActive ? 'activated' : 'deactivated'} successfully`
+    message: `Restaurant ${body.isActive ? 'activated' : 'deactivated'} successfully`
    });
   } catch (error) {
    this.handleError(req, res, error, 'toggleRestaurantStatus');
   }
  }
 
- // SCHEDULE & CLOSURES
- async upsertSchedule(req, res) {
+ // SCHEDULE OPERATIONS
+ async upsertSchedule(req, res, next) {
   try {
+   const scheduleData = req.body || {};
+   if (!scheduleData.dayOfWeek || !scheduleData.opensAt || !scheduleData.closesAt) {
+    return next(new AppError(
+     'Missing required fields: dayOfWeek (0-6), opensAt (HH:MM), closesAt (HH:MM)',
+     400
+    ));
+   }
+
    const errors = validationResult(req);
    if (!errors.isEmpty()) {
     return this.validationError(errors, res);
    }
 
    const vendorId = req.user.id;
-   const scheduleData = req.body || {};
-
-   // ✅ Validate required fields
-   if (!scheduleData.dayOfWeek || !scheduleData.opensAt || !scheduleData.closesAt) {
-    return res.status(400).json({
-     success: false,
-     message: 'dayOfWeek, opensAt, and closesAt are required'
-    });
-   }
-
    logInfo('VendorController:upsertSchedule', {
     vendorId,
     dayOfWeek: scheduleData.dayOfWeek,
@@ -120,141 +150,24 @@ export class VendorController {
   }
  }
 
- async createClosure(req, res) {
-  try {
-   const errors = validationResult(req);
-   if (!errors.isEmpty()) {
-    return this.validationError(errors, res);
-   }
-
-   const vendorId = req.user.id;
-   const closureData = req.body || {};
-
-   // ✅ Validate required fields
-   if (!closureData.startDate || !closureData.endDate) {
-    return res.status(400).json({
-     success: false,
-     message: 'startDate and endDate are required'
-    });
-   }
-
-   logInfo('VendorController:createClosure', { vendorId, startDate: closureData.startDate });
-
-   const result = await this.vendorService.createClosure(vendorId, closureData);
-
-   res.status(201).json({
-    success: true,
-    data: result,
-    message: 'Closure created successfully'
-   });
-  } catch (error) {
-   this.handleError(req, res, error, 'createClosure');
-  }
- }
-
- // MENU OPERATIONS 
- async createMenuCategory(req, res) {
-  try {
-   const errors = validationResult(req);
-   if (!errors.isEmpty()) {
-    return this.validationError(errors, res);
-   }
-
-   const vendorId = req.user.id;
-   const categoryData = req.body || {};
-
-   // ✅ Validate required field
-   if (!categoryData.name) {
-    return res.status(400).json({
-     success: false,
-     message: 'name is required for menu category'
-    });
-   }
-
-   logInfo('VendorController:createMenuCategory', { vendorId, name: categoryData.name });
-
-   const result = await this.vendorService.createMenuCategory(vendorId, categoryData);
-
-   res.status(201).json({
-    success: true,
-    data: result,
-    message: 'Menu category created successfully'
-   });
-  } catch (error) {
-   this.handleError(req, res, error, 'createMenuCategory');
-  }
- }
-
- async createFoodItem(req, res) {
-  try {
-   const errors = validationResult(req);
-   if (!errors.isEmpty()) {
-    return this.validationError(errors, res);
-   }
-
-   const vendorId = req.user.id;
-   const { categoryId } = req.params;
-   const itemData = req.body || {};
-
-   // ✅ Validate required fields
-   if (!itemData.name || !itemData.price) {
-    return res.status(400).json({
-     success: false,
-     message: 'name and price are required for food item'
-    });
-   }
-
-   logInfo('VendorController:createFoodItem', { vendorId, categoryId, name: itemData.name });
-
-   const result = await this.vendorService.createFoodItem(vendorId, categoryId, itemData);
-
-   res.status(201).json({
-    success: true,
-    data: result,
-    message: 'Food item created successfully'
-   });
-  } catch (error) {
-   this.handleError(req, res, error, 'createFoodItem');
-  }
- }
-
- async updateFoodItem(req, res) {
-  try {
-   const errors = validationResult(req);
-   if (!errors.isEmpty()) {
-    return this.validationError(errors, res);
-   }
-
-   const vendorId = req.user.id;
-   const { foodId } = req.params;
-   const updateData = req.body || {};
-
-   logInfo('VendorController:updateFoodItem', { vendorId, foodId, updates: Object.keys(updateData) });
-
-   const result = await this.vendorService.updateFoodItem(vendorId, foodId, updateData);
-
-   res.status(200).json({
-    success: true,
-    data: result,
-    message: 'Food item updated successfully'
-   });
-  } catch (error) {
-   this.handleError(req, res, error, 'updateFoodItem');
-  }
- }
-
- // ORDER MANAGEMENT
- async getOrders(req, res) {
+ // ORDERS
+ async getOrders(req, res, next) {
   try {
    const vendorId = req.user.id;
    const { page = 1, limit = 20, status } = req.query;
 
-   const statusArray = status ? status.split(',') : undefined;
-   logInfo('VendorController:getOrders', { vendorId, page, limit, status });
+   const statusArray = status ? status.split(',').filter(s => s.trim()) : undefined;
+
+   logInfo('VendorController:getOrders', {
+    vendorId,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    status: statusArray
+   });
 
    const result = await this.vendorService.getOrders(vendorId, {
     page: parseInt(page),
-    limit: parseInt(limit)
+    limit: Math.min(50, Math.max(1, parseInt(limit)))
    }, statusArray);
 
    res.status(200).json({
@@ -267,30 +180,28 @@ export class VendorController {
   }
  }
 
- async updateOrderStatus(req, res) {
+ async updateOrderStatus(req, res, next) {
   try {
+   const { orderId } = req.params;
+   const body = req.body || {};
+
+   if (!orderId) {
+    return next(new AppError('orderId parameter required', 400));
+   }
+
+   if (!body.status) {
+    return next(new AppError('status field is required', 400));
+   }
+
    const errors = validationResult(req);
    if (!errors.isEmpty()) {
     return this.validationError(errors, res);
    }
 
    const vendorId = req.user.id;
-   const { orderId } = req.params;
+   logInfo('VendorController:updateOrderStatus', { vendorId, orderId, status: body.status });
 
-   // ✅ SAFE: Ensure status exists
-   const body = req.body || {};
-   const { status } = body;
-
-   if (!status) {
-    return res.status(400).json({
-     success: false,
-     message: 'status field is required'
-    });
-   }
-
-   logInfo('VendorController:updateOrderStatus', { vendorId, orderId, status });
-
-   const result = await this.vendorService.updateOrderStatus(vendorId, orderId, status);
+   const result = await this.vendorService.updateOrderStatus(vendorId, orderId, body.status);
 
    res.status(200).json({
     success: true,
@@ -303,12 +214,16 @@ export class VendorController {
  }
 
  // ANALYTICS & REPORTS
- async getAnalytics(req, res) {
+ async getAnalytics(req, res, next) {
   try {
    const vendorId = req.user.id;
    const { fromDate, toDate } = req.query;
 
-   logInfo('VendorController:getAnalytics', { vendorId, fromDate, toDate });
+   logInfo('VendorController:getAnalytics', {
+    vendorId,
+    fromDate,
+    toDate
+   });
 
    const result = await this.vendorService.getAnalytics(
     vendorId,
@@ -325,9 +240,10 @@ export class VendorController {
   }
  }
 
- async getReviews(req, res) {
+ async getReviews(req, res, next) {
   try {
    const vendorId = req.user.id;
+
    logInfo('VendorController:getReviews', { vendorId });
 
    const result = await this.vendorService.getReviews(vendorId, req.query);
@@ -342,9 +258,10 @@ export class VendorController {
   }
  }
 
- async getActiveDeliveries(req, res) {
+ async getActiveDeliveries(req, res, next) {
   try {
    const vendorId = req.user.id;
+
    logInfo('VendorController:getActiveDeliveries', { vendorId });
 
    const result = await this.vendorService.getActiveDeliveries(vendorId);
@@ -368,6 +285,7 @@ export class VendorController {
 
   return res.status(400).json({
    success: false,
+   message: 'Validation failed',
    errors: errorDetails.map(err => ({
     field: err.path,
     message: err.msg,
@@ -385,22 +303,34 @@ export class VendorController {
    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
   });
 
-  // Map service errors to HTTP status codes
   const statusMap = {
    'RESTAURANT_NOT_FOUND': 404,
    'ORDER_NOT_FOUND': 404,
    'CATEGORY_NOT_FOUND': 404,
+   'FOOD_NOT_FOUND': 404,
    'UNAUTHORIZED_RESTAURANT_ACCESS': 403,
    'CANNOT_CLOSE_WITH_ACTIVE_ORDERS': 400,
    'INVALID_STATUS_TRANSITION': 400,
    'MAX_CATEGORIES_REACHED': 400,
    'MAX_ITEMS_PER_CATEGORY_REACHED': 400,
    'CLOSURE_OVERLAPS_EXISTING': 400,
-   'OPENING_HOURS_MUST_PRECEDE_CLOSING': 400
+   'OPENING_HOURS_MUST_PRECEDE_CLOSING': 400,
+   'INVALID_TIME_FORMAT': 400,
+   'INVALID_DAY_OF_WEEK': 400
   };
 
-  const status = statusMap[error.message] || 500;
-  const message = status === 500 ? 'Internal server error' : error.message;
+  let status = 500;
+  let message = 'Internal server error';
+
+  if (error instanceof AppError) {
+   status = error.statusCode || 500;
+   message = error.message;
+  } else if (statusMap[error.message]) {
+   status = statusMap[error.message];
+   message = error.message;
+  } else {
+   message = error.message || 'Internal server error';
+  }
 
   res.status(status).json({
    success: false,
@@ -408,6 +338,3 @@ export class VendorController {
   });
  }
 }
-
-// Single instance export
-export const vendorController = new VendorController();

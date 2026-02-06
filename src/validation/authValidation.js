@@ -15,7 +15,7 @@ export const registerValidation = [
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage('Password must be 8+ characters with 1 uppercase, 1 lowercase, 1 number'),
 
-  // ✅ FIXED: Proper optional name validation
+
   body('name')
     .optional({ checkFalsy: true })
     .trim()

@@ -6,9 +6,8 @@ import {
 } from 'express-validator';
 
 export class VendorValidation {
-  // ========================================
+
   // RESTAURANT OPERATIONS
-  // ========================================
 
   static createRestaurantValidation() {
     return [
@@ -107,9 +106,8 @@ export class VendorValidation {
     ];
   }
 
-  // ========================================
   // SCHEDULE & CLOSURES
-  // ========================================
+
 
   static upsertScheduleValidation() {
     return [
@@ -165,10 +163,7 @@ export class VendorValidation {
         .escape()
     ];
   }
-
-  // ========================================
   // MENU OPERATIONS
-  // ========================================
 
   static createMenuCategoryValidation() {
     return [
@@ -246,10 +241,7 @@ export class VendorValidation {
         .toInt()
     ];
   }
-
-  // ========================================
   // ORDER OPERATIONS
-  // ========================================
 
   static getOrdersValidation() {
     return [
@@ -293,10 +285,7 @@ export class VendorValidation {
         .withMessage('Invalid order status')
     ];
   }
-
-  // ========================================
   // ANALYTICS & REVIEWS
-  // ========================================
 
   static getAnalyticsValidation() {
     return [
@@ -324,9 +313,8 @@ export class VendorValidation {
     return VendorValidation.getOrdersValidation(); // Same pagination logic
   }
 
-  // ========================================
   // UTILITY: Validation Result Handler
-  // ========================================
+
   static handleValidation = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -340,9 +328,8 @@ export class VendorValidation {
   };
 }
 
-// ========================================
 // NAMED EXPORTS (For Routes)
-// ========================================
+
 export const {
   createRestaurantValidation,
   getRestaurantValidation,
