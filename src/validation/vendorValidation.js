@@ -6,9 +6,7 @@ import {
 } from 'express-validator';
 
 export class VendorValidation {
-
   // RESTAURANT OPERATIONS
-
   static createRestaurantValidation() {
     return [
       body('name')
@@ -17,6 +15,16 @@ export class VendorValidation {
         .isLength({ min: 2, max: 100 })
         .withMessage('Restaurant name must be 2-100 characters')
         .escape(),
+      body('address')
+        .notEmpty()
+        .trim()
+        .isLength({ min: 5, max: 200 })
+        .withMessage('Address must be 5-200 characters'),
+      body('city')
+        .notEmpty()
+        .trim()
+        .isLength({ min: 2, max: 100 })
+        .withMessage('City must be 2-100 characters'),
       body('description')
         .optional()
         .trim()
@@ -27,11 +35,11 @@ export class VendorValidation {
         .optional()
         .isMobilePhone('any')
         .withMessage('Invalid phone number'),
-      body('address')
-        .notEmpty()
+      body('cuisine')
+        .optional()
         .trim()
-        .isLength({ min: 5, max: 200 })
-        .withMessage('Address must be 5-200 characters'),
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Cuisine must be 2-50 characters'),
       body('deliveryRadius')
         .optional()
         .isInt({ min: 1, max: 50 })
@@ -43,10 +51,6 @@ export class VendorValidation {
         .toFloat()
         .withMessage('Delivery fee >= 0')
     ];
-  }
-
-  static getRestaurantValidation() {
-    return []; // No body params for GET
   }
 
   static updateRestaurantValidation() {
@@ -72,6 +76,11 @@ export class VendorValidation {
         .trim()
         .isLength({ min: 5, max: 200 })
         .withMessage('Address must be 5-200 characters'),
+      body('city')
+        .optional()
+        .trim()
+        .isLength({ min: 2, max: 100 })
+        .withMessage('City must be 2-100 characters'),
       body('deliveryRadius')
         .optional()
         .isInt({ min: 1, max: 50 })
@@ -92,7 +101,6 @@ export class VendorValidation {
           }
           return true;
         })
-        .withMessage('Name required when activating restaurant')
     ];
   }
 
@@ -102,16 +110,19 @@ export class VendorValidation {
         .notEmpty()
         .isBoolean()
         .toBoolean()
-        .withMessage('isActive must be boolean')
+        .withMessage('isActive must be boolean (true/false)')
     ];
   }
 
-  // SCHEDULE & CLOSURES
+  static getRestaurantValidation() {
+    return []; // No validation needed for GET
+  }
 
-
+  // SCHEDULE OPERATIONS
   static upsertScheduleValidation() {
     return [
-      param('dayOfWeek')
+      body('dayOfWeek')
+        .notEmpty()
         .isInt({ min: 0, max: 6 })
         .toInt()
         .withMessage('dayOfWeek must be 0-6 (Sunday-Saturday)'),
@@ -138,33 +149,7 @@ export class VendorValidation {
     ];
   }
 
-  static createClosureValidation() {
-    return [
-      body('startDate')
-        .notEmpty()
-        .isISO8601()
-        .toDate()
-        .withMessage('startDate must be valid ISO date (2026-02-04)'),
-      body('endDate')
-        .notEmpty()
-        .isISO8601()
-        .toDate()
-        .withMessage('endDate must be valid ISO date')
-        .custom((value, { req }) => {
-          if (new Date(value) <= new Date(req.body.startDate)) {
-            throw new Error('endDate must be after startDate');
-          }
-          return true;
-        }),
-      body('reason')
-        .optional()
-        .trim()
-        .isLength({ max: 500 })
-        .escape()
-    ];
-  }
   // MENU OPERATIONS
-
   static createMenuCategoryValidation() {
     return [
       body('name')
@@ -202,72 +187,32 @@ export class VendorValidation {
         .isFloat({ min: 0.01, max: 10000 })
         .withMessage('Price must be 0.01-10000')
         .toFloat(),
+      body('preparationTime')
+        .optional()
+        .isInt({ min: 1, max: 120 })
+        .toInt()
+        .withMessage('Preparation time 1-120 minutes'),
       body('isAvailable')
         .optional()
         .isBoolean()
         .toBoolean()
-        .default(true),
-      body('preparationTime')
-        .optional()
-        .isInt({ min: 1, max: 120 })
-        .toInt()
-        .withMessage('Preparation time 1-120 minutes')
     ];
   }
 
-  static updateFoodItemValidation() {
-    return [
-      param('foodId')
-        .isUUID()
-        .withMessage('Valid food item UUID required'),
-      body('name')
-        .optional()
-        .trim()
-        .isLength({ min: 2, max: 100 })
-        .withMessage('Item name must be 2-100 characters')
-        .escape(),
-      body('price')
-        .optional()
-        .isFloat({ min: 0.01, max: 10000 })
-        .toFloat()
-        .withMessage('Price must be 0.01-10000'),
-      body('isAvailable')
-        .optional()
-        .isBoolean()
-        .toBoolean(),
-      body('preparationTime')
-        .optional()
-        .isInt({ min: 1, max: 120 })
-        .toInt()
-    ];
-  }
   // ORDER OPERATIONS
-
   static getOrdersValidation() {
     return [
       query('page')
         .optional()
         .isInt({ min: 1 })
-        .toInt()
-        .default(1),
+        .toInt(),
       query('limit')
         .optional()
         .isInt({ min: 1, max: 50 })
-        .toInt()
-        .default(10),
+        .toInt(),
       query('status')
         .optional()
-        .isArray()
-        .custom((value) => {
-          const validStatuses = [
-            'PENDING', 'CONFIRMED', 'PREPARING',
-            'READY', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED'
-          ];
-          return Array.isArray(value) ?
-            value.every(status => validStatuses.includes(status)) :
-            validStatuses.includes(value);
-        })
-        .withMessage('Invalid order status')
+        .isString()
     ];
   }
 
@@ -278,15 +223,12 @@ export class VendorValidation {
         .withMessage('Valid order UUID required'),
       body('status')
         .notEmpty()
-        .isIn([
-          'CONFIRMED', 'PREPARING', 'READY',
-          'ON_THE_WAY', 'DELIVERED', 'CANCELLED'
-        ])
-        .withMessage('Invalid order status')
+        .isIn(['PENDING', 'CONFIRMED', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED'])
+        .withMessage('Valid order status required')
     ];
   }
-  // ANALYTICS & REVIEWS
 
+  // ANALYTICS & REPORTS
   static getAnalyticsValidation() {
     return [
       query('fromDate')
@@ -297,54 +239,19 @@ export class VendorValidation {
         .optional()
         .isISO8601()
         .toDate()
-        .custom((value, { req }) => {
-          if (req.query.fromDate && new Date(value) <= new Date(req.query.fromDate)) {
-            throw new Error('toDate must be after fromDate');
-          }
-          return true;
-        }),
-      query('groupBy')
-        .optional()
-        .isIn(['day', 'week', 'month'])
     ];
   }
 
   static getReviewsValidation() {
-    return VendorValidation.getOrdersValidation(); // Same pagination logic
+    return [
+      query('page')
+        .optional()
+        .isInt({ min: 1 })
+        .toInt(),
+      query('limit')
+        .optional()
+        .isInt({ min: 1, max: 50 })
+        .toInt()
+    ];
   }
-
-  // UTILITY: Validation Result Handler
-
-  static handleValidation = (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-    next();
-  };
 }
-
-// NAMED EXPORTS (For Routes)
-
-export const {
-  createRestaurantValidation,
-  getRestaurantValidation,
-  updateRestaurantValidation,
-  toggleRestaurantStatusValidation,
-  upsertScheduleValidation,
-  createClosureValidation,
-  createMenuCategoryValidation,
-  createFoodItemValidation,
-  updateFoodItemValidation,
-  getOrdersValidation,
-  updateOrderStatusValidation,
-  getAnalyticsValidation,
-  getReviewsValidation,
-  handleValidation
-} = VendorValidation;
-
-export default VendorValidation;

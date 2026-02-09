@@ -9,9 +9,9 @@ export class AppError extends Error {
 }
 
 export const handleError = (err, req, res, next) => {
- // 🚨 DEVELOPMENT MODE: Show FULL error details
+ //  DEVELOPMENT MODE: Show FULL error details
  if (process.env.NODE_ENV === 'development') {
-  console.error('🚨 FULL ERROR DETAILS:', {
+  console.error('FULL ERROR DETAILS:', {
    message: err.message,
    stack: err.stack,
    statusCode: err.statusCode,

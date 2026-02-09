@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
-import { VendorRepository } from '../repository/vendorRepository.js'
+import { VendorRepository } from '../repository/vendorRepository.js';
 
 export class VendorAuthMiddleware {
   static vendorRepo = new VendorRepository();
@@ -34,6 +34,7 @@ export class VendorAuthMiddleware {
           message: 'Vendor account inactive or not found'
         });
       }
+
       req.user = {
         id: vendorId,
         email: vendor.email
