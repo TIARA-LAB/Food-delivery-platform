@@ -37,18 +37,48 @@ export class VendorRepository {
 
   async getVendorById(vendorId) {
     try {
-      const vendor = await prisma.vendor.findUnique({
+      const user = await prisma.user.findUnique({
         where: { id: vendorId },
-        select: { id: true, email: true, isActive: true }
+        select: { 
+          id: true, 
+          email: true, 
+          role: true,
+          isActive: true 
+        }
       });
-      return vendor;
+
+      if (!user) {
+        logError(`User not found: ${vendorId}`);
+        throw new Error('VENDOR_NOT_FOUND');
+      }
+
+      if (user.role !== 'VENDOR' && user.role !== 2) {
+        logError(`User not vendor: ${vendorId}, role: ${user.role}`);
+        throw new Error('VENDOR_NOT_FOUND');
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        isActive: user.isActive ?? true
+      };
     } catch (error) {
       logError(`getVendorById failed: vendorId=${vendorId}`, { error: error.message });
-      return null;
+      throw error;
     }
   }
 
   async validateVendorRestaurant(vendorId, restaurantId) {
+    const user = await prisma.user.findUnique({
+      where: { id: vendorId },
+      select: { role: true }
+    });
+
+    if (!user || (user.role !== 'VENDOR' && user.role !== 2)) {
+      logError(`Vendor access denied - invalid role: vendorId=${vendorId}`);
+      throw new Error('UNAUTHORIZED_RESTAURANT_ACCESS');
+    }
+
     const restaurant = await prisma.restaurant.findFirst({
       where: {
         vendorId,
@@ -65,32 +95,19 @@ export class VendorRepository {
     return restaurant.id;
   }
 
-  // RESTAURANT OPERATIONS
+  // ✅ FIXED: ONLY Restaurant schema fields (name, description)
   async createRestaurant(vendorId, data) {
     try {
       this.validateInput(data, {
         name: { minLength: 2, maxLength: 100 },
-        description: { maxLength: 500 },
-        phone: { minLength: 10, maxLength: 20 },
-        deliveryRadius: { min: 1, max: 50 },
-        deliveryFee: { min: 0 }
+        description: { minLength: 1, maxLength: 500 }
       });
 
       return await prisma.restaurant.create({
         data: {
           vendorId,
           name: data.name.trim(),
-          description: data.description?.trim() || null,
-          phone: data.phone?.trim() || null,
-          address: data.address?.trim(),
-          city: data.city?.trim(),
-          cuisine: data.cuisine?.trim(),
-          deliveryRadius: data.deliveryRadius,
-          deliveryFee: data.deliveryFee,
-          isActive: false
-        },
-        include: {
-          vendor: { select: { id: true, email: true } }
+          description: data.description?.trim() || null
         }
       });
     } catch (error) {
@@ -105,18 +122,17 @@ export class VendorRepository {
         where: { vendorId },
         include: {
           menuCategories: {
-            where: { items: { some: { isAvailable: true } } },
             include: {
-              items: {
-                where: { isAvailable: true },
+              products: {
+                where: { isAvailable: true, isActive: true },
                 select: {
                   id: true,
                   name: true,
                   description: true,
                   price: true,
-                  imageUrl: true,
+                  image: true,
                   isAvailable: true,
-                  preparationTime: true
+                  prepTimeMinutes: true
                 }
               }
             }
@@ -137,17 +153,22 @@ export class VendorRepository {
 
       this.validateInput(data, {
         name: { minLength: 2, maxLength: 100 },
-        description: { maxLength: 500 },
-        phone: { minLength: 10, maxLength: 20 }
+        description: { minLength: 1, maxLength: 500 }
       });
 
       return await prisma.restaurant.update({
         where: { vendorId },
-        data: { ...data, updatedAt: new Date() },
+        data: { 
+          name: data.name?.trim(),
+          description: data.description?.trim() || null
+        },
         include: {
           menuCategories: {
-            where: { items: { some: { isAvailable: true } } },
-            include: { items: true }
+            include: {
+              products: {
+                where: { isAvailable: true, isActive: true }
+              }
+            }
           }
         }
       });
@@ -170,7 +191,6 @@ export class VendorRepository {
     }
   }
 
-  // SCHEDULE OPERATIONS
   async upsertSchedule(vendorId, scheduleData) {
     try {
       if (scheduleData.dayOfWeek < 0 || scheduleData.dayOfWeek > 6) {
@@ -204,7 +224,6 @@ export class VendorRepository {
     }
   }
 
-  // MENU OPERATIONS
   async createMenuCategory(vendorId, data) {
     try {
       this.validateInput(data, { name: { minLength: 2, maxLength: 50 } });
@@ -228,7 +247,7 @@ export class VendorRepository {
       this.validateInput(data, {
         name: { minLength: 2, maxLength: 100 },
         price: { min: 0.01, max: 10000 },
-        preparationTime: { min: 1, max: 120 }
+        prepTimeMinutes: { min: 1, max: 120 }
       });
 
       const category = await prisma.menuCategory.findFirst({
@@ -241,15 +260,17 @@ export class VendorRepository {
 
       if (!category) throw new Error('CATEGORY_NOT_FOUND');
 
-      return await prisma.foodItem.create({
+      return await prisma.product.create({
         data: {
           categoryId,
+          restaurantId: (await this.validateVendorRestaurant(vendorId)),
           name: data.name.trim(),
           description: data.description?.trim() || null,
           price: data.price,
-          imageUrl: data.imageUrl || null,
-          preparationTime: data.preparationTime || 15,
-          isAvailable: true
+          image: data.imageUrl || null,
+          prepTimeMinutes: data.preparationTime || 15,
+          isAvailable: true,
+          isActive: true
         }
       });
     } catch (error) {
@@ -258,7 +279,6 @@ export class VendorRepository {
     }
   }
 
-  // ORDER OPERATIONS
   async getVendorOrders(vendorId, pagination = {}, status) {
     try {
       const { page, limit } = this.sanitizePagination(pagination);
@@ -276,7 +296,7 @@ export class VendorRepository {
               select: { label: true, city: true, street: true, latitude: true, longitude: true }
             },
             items: {
-              include: { food: true }
+              include: { product: true }
             },
             payment: true,
             delivery: true
@@ -326,114 +346,9 @@ export class VendorRepository {
 
       return { success: true, count: result.count };
     } catch (error) {
-      logError(`updateOrderStatus failed: vendorId=${vendorId}`, { error: error.message });
+      logError(`updateOrderStatus failed:
+  vendorId=${vendorId}, orderId=${orderId}, status=${status}`, { error: error.message });
       throw error;
     }
-  }
-
-  // ANALYTICS, REVIEWS, DELIVERIES (as implemented previously)
-  async getVendorAnalytics(vendorId, fromDate, toDate) {
-    try {
-      const restaurantId = await this.validateVendorRestaurant(vendorId);
-
-      const [totalOrders, totalRevenue, avgRating] = await Promise.all([
-        prisma.order.count({
-          where: {
-            restaurantId,
-            createdAt: {
-              ...(fromDate && { gte: fromDate }),
-              ...(toDate && { lte: toDate })
-            }
-          }
-        }),
-        prisma.order.aggregate({
-          where: {
-            restaurantId,
-            payment: { status: 'PAID' }
-          },
-          _sum: { totalAmount: true }
-        }),
-        prisma.review.aggregate({
-          where: { restaurantId },
-          _avg: { rating: true }
-        })
-      ]);
-
-      return {
-        totalOrders,
-        totalRevenue: totalRevenue._sum?.totalAmount || 0,
-        avgRating: avgRating._avg?.rating || 0
-      };
-    } catch (error) {
-      logError(`getVendorAnalytics failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
-  }
-
-  async getReviews(vendorId, pagination) {
-    try {
-      const { page, limit } = this.sanitizePagination(pagination);
-      const skip = (page - 1) * limit;
-
-      const [reviews, totalCount] = await Promise.all([
-        prisma.review.findMany({
-          where: {
-            restaurant: { vendorId }
-          },
-          include: {
-            user: { select: { name: true } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit
-        }),
-        prisma.review.count({
-          where: {
-            restaurant: { vendorId }
-          }
-        })
-      ]);
-
-      return {
-        data: reviews,
-        pagination: {
-          page,
-          limit,
-          total: totalCount,
-          totalPages: Math.ceil(totalCount / limit)
-        }
-      };
-    } catch (error) {
-      logError(`getReviews failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
-  }
-
-  async getActiveDeliveries(vendorId) {
-    try {
-      return await prisma.delivery.findMany({
-        where: {
-          order: {
-            restaurant: { vendorId },
-            status: { in: ['CONFIRMED', 'ON_THE_WAY'] }
-          }
-        },
-        include: {
-          order: {
-            select: { id: true, totalAmount: true },
-            include: { user: { select: { name: true, phone: true } } }
-          },
-          rider: { select: { name: true, phone: true } }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-    } catch (error) {
-      logError(`getActiveDeliveries failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
-  }
-
-  async disconnect() {
-    await prisma.$disconnect();
   }
 }

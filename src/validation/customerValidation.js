@@ -29,5 +29,5 @@ export const customerValidators = {
   login: validateRequest(CustomerSchemas.login),
   addToCart: validateRequest(CustomerSchemas.addToCart),
   createOrder: validateRequest(CustomerSchemas.createOrder)
-  // ✅ REMOVED restaurantQuery - was causing auth issue
+
 };

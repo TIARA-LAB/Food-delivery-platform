@@ -12,26 +12,25 @@ export const schemas = {
     images: z.array(z.string().url()).optional(),
     stockQuantity: z.number().int().min(0).max(9999).default(9999),
     prepTimeMinutes: z.number().int().min(1).max(120).default(15),
-    categoryId: z.string().uuid(),
-    restaurantId: z.string().uuid()  
+    
   }),
-  
+
   update: z.object({
     name: z.string().min(3).max(255).optional(),
     description: z.string().max(1000).optional(),
     price: z.number().positive().optional(),
-    originalPrice: z.number().positive().optional(),  
+    originalPrice: z.number().positive().optional(),
     discountPercent: z.number().min(0).max(100).optional(),
     discountExpiry: z.string().optional(),
     isActive: z.boolean().optional(),
     isAvailable: z.boolean().optional(),
     stockQuantity: z.number().int().min(0).max(9999).optional()
-  }).refine(data => {
-    if (data.price && data.originalPrice && data.price > data.originalPrice) {
-      return false;
-    }
-    return true;
-  }, { message: 'Sale price cannot exceed original price' })
+  }),
+
+  discount: z.object({
+    discountPercent: z.number().min(1).max(90),  // 1-90%
+    discountExpiry: z.string().datetime().optional()
+  })
 };
 
 export const validateRequest = (schema) => (req, res, next) => {

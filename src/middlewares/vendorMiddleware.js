@@ -1,10 +1,8 @@
 import jwt from 'jsonwebtoken';
+import prisma from '../config/db.js'; 
 import { logInfo, logWarn, logError } from '../utils/logger.js';
-import { VendorRepository } from '../repository/vendorRepository.js';
 
 export class VendorAuthMiddleware {
-  static vendorRepo = new VendorRepository();
-
   static async auth(req, res, next) {
     try {
       const token = req.headers.authorization?.replace('Bearer ', '');
@@ -15,35 +13,48 @@ export class VendorAuthMiddleware {
         });
       }
 
-
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-      const vendorId = decoded.id;
+      const userId = decoded.id;
 
-      if (!vendorId) {
+      if (!userId) {
         return res.status(401).json({
           success: false,
           message: 'Invalid token payload'
         });
       }
 
-      const vendor = await VendorAuthMiddleware.vendorRepo.getVendorById(vendorId);
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { 
+          id: true, 
+          email: true, 
+          role: true, 
+          isActive: true 
+        }
+      });
 
-      if (!vendor || !vendor.isActive) {
-        logWarn('VendorAuthMiddleware: Inactive vendor access denied', { vendorId });
+      if (!user || !user.isActive || user.role !== 'VENDOR') {
+        logWarn('Auth failed', { 
+          userId, 
+          userRole: user?.role,
+          isActive: user?.isActive 
+        });
         return res.status(403).json({
           success: false,
-          message: 'Vendor account inactive or not found'
+          message: 'Vendor account inactive or access denied'
         });
       }
 
-      
       req.user = {
-        id: vendorId,
-        email: vendor.email,
-        role: vendor.role || decoded.role || 'VENDOR'  // Role from DB or token
+        id: userId,
+        email: user.email,
+        role: 'VENDOR'
       };
 
-      logInfo('VendorAuthMiddleware: Auth successful', { vendorId });
+      // Controller expects req.vendorId
+      req.vendorId = userId;  
+
+      logInfo('VendorAuthMiddleware: Auth successful', { userId });
       next();
     } catch (error) {
       logError('VendorAuthMiddleware: JWT verification failed', {
@@ -56,73 +67,6 @@ export class VendorAuthMiddleware {
         : 'Invalid or expired token';
 
       res.status(401).json({ success: false, message });
-    }
-  }
-
-  static async requireActiveRestaurant(req, res, next) {
-    try {
-      const vendorId = req.user.id;
-      const restaurant = await VendorAuthMiddleware.vendorRepo.getVendorRestaurant(vendorId);
-
-      if (!restaurant || !restaurant.isActive) {
-        logWarn('VendorAuthMiddleware: No active restaurant', { vendorId });
-        return res.status(403).json({
-          success: false,
-          message: 'No active restaurant found for this vendor'
-        });
-      }
-
-      req.restaurant = {
-        id: restaurant.id,
-        vendorId: restaurant.vendorId
-      };
-
-      logInfo('VendorAuthMiddleware: Restaurant validated', {
-        vendorId,
-        restaurantId: restaurant.id
-      });
-
-      next();
-    } catch (error) {
-      logError('VendorAuthMiddleware: Restaurant validation failed', {
-        vendorId: req.user?.id,
-        error: error.message
-      });
-      res.status(500).json({
-        success: false,
-        message: 'Server error during restaurant validation'
-      });
-    }
-  }
-
-  static async requireVendorOrder(req, res, next) {
-    try {
-      const vendorId = req.user.id;
-      const { orderId } = req.params;
-      const order = await VendorAuthMiddleware.vendorRepo.getOrderById(vendorId, orderId);
-
-      if (!order) {
-        logWarn('VendorAuthMiddleware: Order access denied', { vendorId, orderId });
-        return res.status(404).json({
-          success: false,
-          message: 'Order not found or access denied'
-        });
-      }
-
-      req.order = { id: orderId };
-      logInfo('VendorAuthMiddleware: Order validated', { vendorId, orderId });
-
-      next();
-    } catch (error) {
-      logError('VendorAuthMiddleware: Order validation failed', {
-        vendorId: req.user?.id,
-        orderId: req.params?.orderId,
-        error: error.message
-      });
-      res.status(500).json({
-        success: false,
-        message: 'Server error during order validation'
-      });
     }
   }
 }

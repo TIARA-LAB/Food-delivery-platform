@@ -1,6 +1,7 @@
 import { ProductRepository } from '../repository/productRepository.js';
 import { AppError } from '../utils/error.js';
 import { logError, logInfo } from '../utils/logger.js';
+import prisma from '../config/db.js'; 
 
 export default class ProductService {
   constructor() {
@@ -9,32 +10,47 @@ export default class ProductService {
 
   async create(data, vendorId) {
     try {
-      //  Use repository for restaurant validation
-      const { restaurant, hasAccess } = await this.repo.validateRestaurantOwnership(
-        data.restaurantId, 
-        vendorId
-      );
+      console.log('Service create - vendorId:', vendorId, 'data:', data);
       
+      let { restaurantId } = data;
+      
+      // Auto-fetch restaurant if not provided
+      if (!restaurantId) {
+        console.log('No restaurantId, auto-fetching for vendor:', vendorId);
+        const restaurant = await prisma.restaurant.findFirst({
+          where: { vendorId },
+          select: { id: true }
+        });
+        
+        if (!restaurant) {
+          console.log('No restaurant found for vendor:', vendorId);
+          throw new AppError('No restaurant found for vendor', 404);
+        }
+        restaurantId = restaurant.id;
+        console.log('Auto-assigned restaurantId:', restaurantId);
+      }
+
+      const { restaurant, hasAccess } = await this.repo.validateRestaurantOwnership(restaurantId, vendorId);
       if (!restaurant || !hasAccess) {
         throw new AppError('Access denied to this restaurant', 403);
       }
 
-      logInfo('Creating product', { vendorId, restaurantId: data.restaurantId });
-      return await this.repo.create(data);
+      logInfo('Creating product', { vendorId, restaurantId });
+      return await this.repo.create({ ...data, restaurantId });
     } catch (error) {
-      logError('Product creation failed', { vendorId, data: data.restaurantId, error: error.message });
+      console.error('SERVICE CREATE ERROR:', error);
+      logError('Product creation failed', { vendorId, error: error.message });
       throw error;
     }
   }
 
   async getMany(query) {
     try {
-      const { page = 1, limit = 10, search, restaurantId, categoryId, available } = query;
+      const { page = 1, limit = 10, search, restaurantId, available } = query;
       const skip = (page - 1) * Number(limit);
       
       const where = {
         ...(restaurantId && { restaurantId }),
-        ...(categoryId && { categoryId }),
         ...(search && {
           OR: [
             { name: { contains: search, mode: 'insensitive' } },
@@ -44,15 +60,15 @@ export default class ProductService {
         ...(available !== undefined && { isAvailable: available === 'true' })
       };
 
+      console.log(' getMany query:', { page, limit, search, restaurantId, available });
+
       const { data, total } = await this.repo.findMany({ 
-        skip, 
+        skip: Number(skip), 
         take: Number(limit), 
         where 
       });
       
-      logInfo('Products fetched', { page, limit, total, filters: query });
-      
-      return {
+      const result = {
         data: data.map(product => this.withDiscounts(product)),
         meta: { 
           page: Number(page), 
@@ -61,23 +77,35 @@ export default class ProductService {
           pages: Math.ceil(total / Number(limit)) 
         }
       };
+
+      console.log('getMany success:', { total: data.length, page });
+      return result;
     } catch (error) {
+      console.error('SERVICE GETMANY ERROR:', error);
       logError('Fetch products failed', { query, error: error.message });
-      throw new AppError(error.message, 500);
+      throw new AppError(error.message || 'Failed to fetch products', 500);
     }
   }
 
   async getOne(id) {
     try {
+      console.log(' getOne id:', id);
+      
+      if (!id) throw new AppError('Product ID is required', 400);
+      
       const product = await this.repo.findById(id);
       if (!product) {
         throw new AppError('Product not found', 404);
       }
-      if (!product.restaurant.isActive) {
+      if (!product.restaurant?.isActive) {
         throw new AppError('Restaurant is inactive', 400);
       }
-      return this.withDiscounts(product);
+      
+      const result = this.withDiscounts(product);
+      console.log(' getOne success:', product.name);
+      return result;
     } catch (error) {
+      console.error(' SERVICE GETONE ERROR:', error);
       logError('Get product failed', { id, error: error.message });
       throw error;
     }
@@ -85,6 +113,10 @@ export default class ProductService {
 
   async update(id, data, vendorId) {
     try {
+      console.log(' update id:', id, 'vendorId:', vendorId);
+      
+      if (!id) throw new AppError('Product ID is required', 400);
+      
       const product = await this.repo.findById(id);
       if (!product) throw new AppError('Product not found', 404);
       if (product.restaurant.vendorId !== vendorId) {
@@ -94,13 +126,12 @@ export default class ProductService {
         throw new AppError('Restaurant is inactive', 400);
       }
 
-      if (data.price && data.originalPrice && data.price > data.originalPrice) {
-        throw new AppError('Sale price cannot exceed original price', 400);
-      }
-
       logInfo('Updating product', { id, changes: Object.keys(data) });
-      return await this.repo.update(id, data);
+      const updated = await this.repo.update(id, data);
+      console.log(' update success');
+      return updated;
     } catch (error) {
+      console.error('SERVICE UPDATE ERROR:', error);
       logError('Product update failed', { id, vendorId, error: error.message });
       throw error;
     }
@@ -108,6 +139,10 @@ export default class ProductService {
 
   async delete(id, vendorId) {
     try {
+      console.log(' delete id:', id, 'vendorId:', vendorId);
+      
+      if (!id) throw new AppError('Product ID is required', 400);
+      
       const product = await this.repo.findById(id);
       if (!product) throw new AppError('Product not found', 404);
       if (product.restaurant.vendorId !== vendorId) {
@@ -118,38 +153,97 @@ export default class ProductService {
       }
 
       logInfo('Deleting product', { id });
-      return await this.repo.delete(id);
+      await this.repo.delete(id);
+      console.log('delete success');
+      return { success: true };
     } catch (error) {
+      console.error('SERVICE DELETE ERROR:', error);
       logError('Product delete failed', { id, vendorId, error: error.message });
       throw error;
     }
   }
 
+  async addDiscount(productId, discountData, vendorId) {
+    try {
+      console.log(' addDiscount productId:', productId, 'vendorId:', vendorId);
+      
+      if (!productId) throw new AppError('Product ID is required', 400);
+      
+      const product = await this.repo.findById(productId);
+      if (!product) throw new AppError('Product not found', 404);
+      if (product.restaurant.vendorId !== vendorId) {
+        throw new AppError('Access denied', 403);
+      }
+      if (!product.restaurant.isActive) {
+        throw new AppError('Restaurant is inactive', 400);
+      }
+
+      const updateData = {
+        discountPercent: Number(discountData.discountPercent),
+        discountExpiry: discountData.discountExpiry || null
+      };
+
+      logInfo('Adding discount', { productId, discountPercent: updateData.discountPercent });
+      const updated = await this.repo.update(productId, updateData);
+      console.log(' addDiscount success');
+      return updated;
+    } catch (error) {
+      console.error('SERVICE ADD DISCOUNT ERROR:', error);
+      logError('Add discount failed', { productId, vendorId, error: error.message });
+      throw error;
+    }
+  }
+
+  async removeDiscount(productId, vendorId) {
+    try {
+      console.log(' removeDiscount productId:', productId);
+      
+      if (!productId) throw new AppError('Product ID is required', 400);
+      
+      const product = await this.repo.findById(productId);
+      if (!product) throw new AppError('Product not found', 404);
+      if (product.restaurant.vendorId !== vendorId) {
+        throw new AppError('Access denied', 403);
+      }
+
+      logInfo('Removing discount', { productId });
+      const updated = await this.repo.update(productId, {
+        discountPercent: null,
+        discountExpiry: null
+      });
+      console.log('removeDiscount success');
+      return updated;
+    } catch (error) {
+      console.error('SERVICE REMOVE DISCOUNT ERROR:', error);
+      logError('Remove discount failed', { productId, vendorId, error: error.message });
+      throw error;
+    }
+  }
+
+  async updateDiscount(productId, discountData, vendorId) {
+  
+    return await this.addDiscount(productId, discountData, vendorId);
+  }
+
   withDiscounts(product) {
-    const hasDiscount = product.discountPercent > 0 && 
-      (!product.discountExpiry || new Date(product.discountExpiry) > new Date());
-    
-    const finalPrice = hasDiscount 
-      ? Number((product.price * (1 - product.discountPercent / 100)).toFixed(2))
-      : product.price;
+    try {
+      const hasDiscount = product.discountPercent > 0 && 
+        (!product.discountExpiry || new Date(product.discountExpiry) > new Date());
+      
+      const finalPrice = hasDiscount 
+        ? Number((product.price * (1 - product.discountPercent / 100)).toFixed(2))
+        : product.price;
 
-    const savings = hasDiscount 
-      ? Number((product.price * (product.discountPercent / 100)).toFixed(2))
-      : 0;
-
-    const daysLeft = product.discountExpiry 
-      ? Math.ceil((new Date(product.discountExpiry) - new Date()) / (1000 * 60 * 60 * 24))
-      : null;
-
-    return {
-      ...product,
-      finalPrice,
-      originalPrice: product.originalPrice || product.price,
-      savings,
-      hasDiscount,
-      discountPercent: hasDiscount ? product.discountPercent : 0,
-      daysLeft,
-      isDiscounted: hasDiscount && savings > 0
-    };
+      return {
+        ...product,
+        finalPrice,
+        originalPrice: product.originalPrice || product.price,
+        hasDiscount,
+        isDiscounted: hasDiscount
+      };
+    } catch (error) {
+      console.error('withDiscounts error:', error);
+      return product; // Fallback to original product
+    }
   }
 }

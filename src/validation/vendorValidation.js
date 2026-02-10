@@ -7,51 +7,24 @@ import {
 
 export class VendorValidation {
   // RESTAURANT OPERATIONS
-  static createRestaurantValidation() {
+static createRestaurantValidation() {
     return [
       body('name')
         .trim()
         .notEmpty()
+        .withMessage('Restaurant name is required')
         .isLength({ min: 2, max: 100 })
-        .withMessage('Restaurant name must be 2-100 characters')
-        .escape(),
-      body('address')
-        .notEmpty()
-        .trim()
-        .isLength({ min: 5, max: 200 })
-        .withMessage('Address must be 5-200 characters'),
-      body('city')
-        .notEmpty()
-        .trim()
-        .isLength({ min: 2, max: 100 })
-        .withMessage('City must be 2-100 characters'),
+        .withMessage('Name must be 2-100 characters'),
+      
       body('description')
         .optional()
         .trim()
-        .isLength({ max: 500 })
-        .withMessage('Description max 500 characters')
-        .escape(),
-      body('phone')
-        .optional()
-        .isMobilePhone('any')
-        .withMessage('Invalid phone number'),
-      body('cuisine')
-        .optional()
-        .trim()
-        .isLength({ min: 2, max: 50 })
-        .withMessage('Cuisine must be 2-50 characters'),
-      body('deliveryRadius')
-        .optional()
-        .isInt({ min: 1, max: 50 })
-        .toInt()
-        .withMessage('Delivery radius 1-50km'),
-      body('deliveryFee')
-        .optional()
-        .isFloat({ min: 0 })
-        .toFloat()
-        .withMessage('Delivery fee >= 0')
+        .isLength({ min: 1, max: 500 })
+        .withMessage('Description must be 1-500 characters')
     ];
   }
+   
+
 
   static updateRestaurantValidation() {
     return [

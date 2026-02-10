@@ -57,6 +57,10 @@ export class VendorController {
 
   async updateRestaurant(req, res, next) {
     try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
       if (!req.body || Object.keys(req.body).length === 0) {
         return next(new AppError('No update data provided', 400));
       }
@@ -86,6 +90,10 @@ export class VendorController {
 
   async toggleRestaurantStatus(req, res, next) {
     try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return this.validationError(errors, res);
@@ -108,7 +116,194 @@ export class VendorController {
     }
   }
 
-  // ... [all other methods remain exactly the same until handleError] ...
+  // SCHEDULE OPERATIONS
+  async upsertSchedule(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return this.validationError(errors, res);
+      }
+
+      const vendorId = req.user.id;
+      logInfo('VendorController:upsertSchedule', { vendorId });
+
+      const result = await this.vendorService.upsertSchedule(vendorId, req.body);
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: 'Schedule updated successfully'
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'upsertSchedule');
+    }
+  }
+
+  // MENU OPERATIONS
+  async createMenuCategory(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return this.validationError(errors, res);
+      }
+
+      const vendorId = req.user.id;
+      logInfo('VendorController:createMenuCategory', { vendorId });
+
+      const result = await this.vendorService.createMenuCategory(vendorId, req.body);
+
+      res.status(201).json({
+        success: true,
+        message: 'Menu category created successfully',
+        data: result
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'createMenuCategory');
+    }
+  }
+
+  async createFoodItem(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return this.validationError(errors, res);
+      }
+
+      const vendorId = req.user.id;
+      const categoryId = req.params.categoryId;
+      logInfo('VendorController:createFoodItem', { vendorId, categoryId });
+
+      const result = await this.vendorService.createFoodItem(vendorId, categoryId, req.body);
+
+      res.status(201).json({
+        success: true,
+        message: 'Food item created successfully',
+        data: result
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'createFoodItem');
+    }
+  }
+
+  // ORDER OPERATIONS
+  async getOrders(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const vendorId = req.user.id;
+      const pagination = req.query;
+      logInfo('VendorController:getOrders', { vendorId });
+
+      const result = await this.vendorService.getVendorOrders(vendorId, pagination);
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'getOrders');
+    }
+  }
+
+  async updateOrderStatus(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const vendorId = req.user.id;
+      const orderId = req.params.orderId;
+      const { status } = req.body;
+      logInfo('VendorController:updateOrderStatus', { vendorId, orderId, status });
+
+      const result = await this.vendorService.updateOrderStatus(vendorId, orderId, status);
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: 'Order status updated successfully'
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'updateOrderStatus');
+    }
+  }
+
+  // ANALYTICS & REPORTS
+  async getAnalytics(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const vendorId = req.user.id;
+      const { fromDate, toDate } = req.query;
+      logInfo('VendorController:getAnalytics', { vendorId });
+
+      const result = await this.vendorService.getVendorAnalytics(vendorId, fromDate, toDate);
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'getAnalytics');
+    }
+  }
+
+  async getReviews(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const vendorId = req.user.id;
+      const pagination = req.query;
+      logInfo('VendorController:getReviews', { vendorId });
+
+      const result = await this.vendorService.getReviews(vendorId, pagination);
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'getReviews');
+    }
+  }
+
+  async getActiveDeliveries(req, res, next) {
+    try {
+      if (!req.user?.id) {
+        return next(new AppError('Vendor authentication required', 401));
+      }
+
+      const vendorId = req.user.id;
+      logInfo('VendorController:getActiveDeliveries', { vendorId });
+
+      const result = await this.vendorService.getActiveDeliveries(vendorId);
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      this.handleError(req, res, error, 'getActiveDeliveries');
+    }
+  }
 
   // UTILITY METHODS
   validationError(errors, res) {
@@ -143,19 +338,19 @@ export class VendorController {
       'ORDER_NOT_FOUND': 404,
       'CATEGORY_NOT_FOUND': 404,
       'FOOD_NOT_FOUND': 404,
-      'VENDOR_NOT_FOUND': 404,
-      'FAILED_TO_CREATE_RESTAURANT': 400,      
-      'FAILED_TO_FETCH_RESTAURANT': 404,      
-      'FAILED_TO_UPDATE_RESTAURANT': 400,   
-      'FAILED_TO_TOGGLE_STATUS': 400,         
-      'FAILED_TO_UPDATE_SCHEDULE': 400,       
+      'VENDOR_NOT_FOUND': 403,
+      'FAILED_TO_CREATE_RESTAURANT': 400,
+      'FAILED_TO_FETCH_RESTAURANT': 404,
+      'FAILED_TO_UPDATE_RESTAURANT': 400,
+      'FAILED_TO_TOGGLE_STATUS': 400,
+      'FAILED_TO_UPDATE_SCHEDULE': 400,
       'FAILED_TO_CREATE_CATEGORY': 400,
-      'FAILED_TO_CREATE_ITEM': 400,       
-      'FAILED_TO_FETCH_ORDERS': 400,          
-      'FAILED_TO_UPDATE_ORDER': 400,         
-      'FAILED_TO_FETCH_ANALYTICS': 400,        
-      'FAILED_TO_FETCH_REVIEWS': 400,          
-      'FAILED_TO_FETCH_DELIVERIES': 400,       
+      'FAILED_TO_CREATE_ITEM': 400,
+      'FAILED_TO_FETCH_ORDERS': 400,
+      'FAILED_TO_UPDATE_ORDER': 400,
+      'FAILED_TO_FETCH_ANALYTICS': 400,
+      'FAILED_TO_FETCH_REVIEWS': 400,
+      'FAILED_TO_FETCH_DELIVERIES': 400,
       'UNAUTHORIZED_RESTAURANT_ACCESS': 403,
       'CANNOT_CLOSE_WITH_ACTIVE_ORDERS': 400,
       'INVALID_STATUS_TRANSITION': 400,

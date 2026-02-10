@@ -6,7 +6,7 @@ import authRoutes from './routes/authRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
 import productRoutes from './routes/productRoutes.js';
-import { handleError } from './utils/error.js';
+import { handleError } from './utils/error.js'; 
 import helmet from 'helmet';
 
 const app = express();
@@ -32,10 +32,9 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/vendor', vendorRoutes);
 app.use('/api/customer', customerRoutes);
-app.use('/api/products', productRoutes)
+app.use('/api/products', productRoutes);
 
-
-
+// 404 handler
 app.use((req, res, next) => {
   const err = new Error(`Route ${req.originalUrl} not found`);
   err.statusCode = 404;
@@ -43,9 +42,8 @@ app.use((req, res, next) => {
   next(err);
 });
 
-// Global error handler 
-app.use(handleError);
-
+// ✅ GLOBAL ERROR HANDLER - LAST (use handleError)
+app.use(handleError);  
 const port = config.port || 3000;
 logInfo(`Server starting on port ${port}`);
 

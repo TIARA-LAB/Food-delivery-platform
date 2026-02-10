@@ -12,12 +12,7 @@ import { logInfo } from '../utils/logger.js';
 const router = Router();
 const vendorController = new VendorController();
 
-// RATE LIMITERS
-const vendorLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
-  message: { success: false, message: 'Too many vendor requests' }
-});
+
 
 const restaurantCreationLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours

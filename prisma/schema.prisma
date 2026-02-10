@@ -139,16 +139,13 @@ model MenuCategory {
   position     Int       @default(0)
   createdAt    DateTime  @default(now())
 
-  products     Product[]
-
   @@map("menu_categories")
   @@index([restaurantId])
 }
 
-// PRODUCT (✅ MySQL Compatible - Single image + JSON images array)
+// PRODUCT -
 model Product {
   id              String       @id @default(uuid())
-  categoryId      String
   restaurantId    String
   name            String       @db.VarChar(255)
   description     String?      @db.Text
@@ -156,8 +153,8 @@ model Product {
   originalPrice   Float?       @db.Float
   discountPercent Float?       @db.Float
   discountExpiry  DateTime?
-  image           String?      @db.VarChar(500)  // ✅ Main image (MySQL compatible)
-  images          Json?        // ✅ Multiple images as JSON array ["url1", "url2"]
+  image           String?      @db.VarChar(500)
+  images          Json?
   isActive        Boolean      @default(true)
   isAvailable     Boolean      @default(true)
   stockQuantity   Int          @default(9999)
@@ -166,13 +163,11 @@ model Product {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  category        MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   restaurant      Restaurant   @relation(fields: [restaurantId], references: [id])
   orderItems      OrderItem[]
 
   @@map("products")
   @@index([restaurantId])
-  @@index([categoryId])
   @@index([isActive, isAvailable])
 }
 
