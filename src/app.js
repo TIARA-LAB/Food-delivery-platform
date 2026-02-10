@@ -5,6 +5,7 @@ import { logInfo } from './utils/logger.js';
 import authRoutes from './routes/authRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
+import productRoutes from './routes/productRoutes.js';
 import { handleError } from './utils/error.js';
 import helmet from 'helmet';
 
@@ -31,6 +32,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/vendor', vendorRoutes);
 app.use('/api/customer', customerRoutes);
+app.use('/api/products', productRoutes)
 
 
 

@@ -15,7 +15,8 @@ export class VendorAuthMiddleware {
         });
       }
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
       const vendorId = decoded.id;
 
       if (!vendorId) {
@@ -35,9 +36,11 @@ export class VendorAuthMiddleware {
         });
       }
 
+      
       req.user = {
         id: vendorId,
-        email: vendor.email
+        email: vendor.email,
+        role: vendor.role || decoded.role || 'VENDOR'  // Role from DB or token
       };
 
       logInfo('VendorAuthMiddleware: Auth successful', { vendorId });
@@ -59,7 +62,6 @@ export class VendorAuthMiddleware {
   static async requireActiveRestaurant(req, res, next) {
     try {
       const vendorId = req.user.id;
-
       const restaurant = await VendorAuthMiddleware.vendorRepo.getVendorRestaurant(vendorId);
 
       if (!restaurant || !restaurant.isActive) {

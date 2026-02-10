@@ -1,3 +1,4 @@
+// This is your development database.
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -7,6 +8,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ENUMS
 enum Role {
   CUSTOMER
   ADMIN
@@ -38,29 +40,34 @@ enum PaymentStatus {
 
 // USER
 model User {
-  id         String      @id @default(uuid())
-  name       String
-  email      String      @unique
-  password   String
-  phone      String?     @unique
-  role       Role        @default(CUSTOMER)
-  isActive   Boolean     @default(true)
-  refreshToken String?
-  emailVerified Boolean @default(false)
-  addresses  Address[]
-  orders     Order[]
-  reviews    Review[]
-  restaurant Restaurant? @relation("VendorRestaurant")
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  Delivery   Delivery[]
+  id              String      @id @default(uuid())
+  name            String
+  email           String      @unique
+  password        String
+  phone           String?     @unique
+  role            Role        @default(CUSTOMER)
+  isActive        Boolean     @default(true)
+  refreshToken    String?
+  emailVerified   Boolean     @default(false)
+  addresses       Address[]
+  orders          Order[]
+  reviews         Review[]
+  restaurant      Restaurant? @relation("VendorRestaurant")
+  deliveries      Delivery[]  @relation("RiderDeliveries")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("users")
+  @@index([email])
+  @@index([phone])
+  @@index([role])
 }
 
 // ADDRESS
 model Address {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   label     String
   city      String
   street    String
@@ -68,6 +75,9 @@ model Address {
   longitude Float?
   orders    Order[]
   createdAt DateTime @default(now())
+
+  @@map("addresses")
+  @@index([userId])
 }
 
 // RESTAURANT
@@ -82,56 +92,88 @@ model Restaurant {
   schedules      RestaurantSchedule[]
   closures       RestaurantClosure[]
   menuCategories MenuCategory[]
+  products       Product[]
   orders         Order[]
   reviews        Review[]
   createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@map("restaurants")
+  @@index([vendorId])
 }
 
-// SCHEDULE
+// RESTAURANT SCHEDULE
 model RestaurantSchedule {
   id           String     @id @default(uuid())
   restaurantId String
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   dayOfWeek    Int
   opensAt      String
   closesAt     String
   isClosed     Boolean    @default(false)
 
   @@unique([restaurantId, dayOfWeek])
+  @@map("restaurant_schedules")
 }
 
-// CLOSURE
+// RESTAURANT CLOSURE
 model RestaurantClosure {
   id           String     @id @default(uuid())
   restaurantId String
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   startDate    DateTime
   endDate      DateTime
   reason       String?
   createdAt    DateTime   @default(now())
+
+  @@map("restaurant_closures")
+  @@index([restaurantId])
 }
 
-// MENU
+// MENU CATEGORY
 model MenuCategory {
-  id           String     @id @default(uuid())
+  id           String    @id @default(uuid())
   restaurantId String
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   name         String
-  items        FoodItem[]
-  createdAt    DateTime   @default(now())
+  position     Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  products     Product[]
+
+  @@map("menu_categories")
+  @@index([restaurantId])
 }
 
-model FoodItem {
-  id          String       @id @default(uuid())
-  categoryId  String
-  category    MenuCategory @relation(fields: [categoryId], references: [id])
-  name        String
-  description String?
-  price       Float
-  image       String?
-  isAvailable Boolean      @default(true)
-  orderItems  OrderItem[]
-  createdAt   DateTime     @default(now())
+// PRODUCT (✅ MySQL Compatible - Single image + JSON images array)
+model Product {
+  id              String       @id @default(uuid())
+  categoryId      String
+  restaurantId    String
+  name            String       @db.VarChar(255)
+  description     String?      @db.Text
+  price           Float
+  originalPrice   Float?       @db.Float
+  discountPercent Float?       @db.Float
+  discountExpiry  DateTime?
+  image           String?      @db.VarChar(500)  // ✅ Main image (MySQL compatible)
+  images          Json?        // ✅ Multiple images as JSON array ["url1", "url2"]
+  isActive        Boolean      @default(true)
+  isAvailable     Boolean      @default(true)
+  stockQuantity   Int          @default(9999)
+  prepTimeMinutes Int          @default(15)
+  position        Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  category        MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  restaurant      Restaurant   @relation(fields: [restaurantId], references: [id])
+  orderItems      OrderItem[]
+
+  @@map("products")
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@index([isActive, isAvailable])
 }
 
 // ORDER SYSTEM
@@ -140,50 +182,67 @@ model Order {
   userId       String
   restaurantId String
   addressId    String
-  user         User        @relation(fields: [userId], references: [id])
-  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
-  address      Address     @relation(fields: [addressId], references: [id])
   status       OrderStatus @default(PENDING)
   totalAmount  Float
   items        OrderItem[]
   payment      Payment?
   delivery     Delivery?
+  user         User        @relation(fields: [userId], references: [id])
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
+  address      Address     @relation(fields: [addressId], references: [id])
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  @@map("orders")
+  @@index([userId])
+  @@index([restaurantId])
+  @@index([status])
 }
 
+// ORDER ITEM
 model OrderItem {
-  id       String   @id @default(uuid())
-  orderId  String
-  foodId   String
-  order    Order    @relation(fields: [orderId], references: [id])
-  food     FoodItem @relation(fields: [foodId], references: [id])
-  quantity Int
-  price    Float
+  id         String   @id @default(uuid())
+  orderId    String
+  productId  String
+  quantity   Int
+  price      Float
+
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+  @@index([orderId])
+  @@index([productId])
 }
 
 // PAYMENT
 model Payment {
   id        String        @id @default(uuid())
   orderId   String        @unique
-  order     Order         @relation(fields: [orderId], references: [id])
+  order     Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   amount    Float
   method    PaymentMethod
   status    PaymentStatus @default(PENDING)
   reference String?
+  createdAt DateTime      @default(now())
 
-  createdAt DateTime @default(now())
+  @@map("payments")
+  @@index([orderId])
 }
 
 // DELIVERY
 model Delivery {
-  id          String    @id @default(uuid())
-  orderId     String    @unique
+  id          String   @id @default(uuid())
+  orderId     String   @unique
   riderId     String?
-  order       Order     @relation(fields: [orderId], references: [id])
-  rider       User?     @relation(fields: [riderId], references: [id])
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rider       User?    @relation("RiderDeliveries", fields: [riderId], references: [id])
   deliveredAt DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
+
+  @@map("deliveries")
+  @@index([orderId])
+  @@index([riderId])
 }
 
 // REVIEW
@@ -191,9 +250,13 @@ model Review {
   id           String     @id @default(uuid())
   userId       String
   restaurantId String
-  user         User       @relation(fields: [userId], references: [id])
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   rating       Int
   comment      String?
+  user         User       @relation(fields: [userId], references: [id])
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   createdAt    DateTime   @default(now())
+
+  @@map("reviews")
+  @@index([userId])
+  @@index([restaurantId])
 }

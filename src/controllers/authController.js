@@ -5,7 +5,7 @@ import { registerValidation, loginValidation, resendVerificationValidation } fro
 
 const authService = new AuthService();
 
-// ✅ NO SELF-REFERENCES - DIRECTLY USE VALIDATORS
+// 
 export const register = [
  (req, res, next) => {
   req.body = req.body || {};

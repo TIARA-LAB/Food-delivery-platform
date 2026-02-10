@@ -28,7 +28,7 @@ export const login = async (req, res, next) => {
   }
 };
 
-// ✅ PUBLIC - NO AUTH
+
 export const getRestaurants = async (req, res, next) => {
   try {
     const restaurants = await customerService.getRestaurants(req.query);
@@ -38,7 +38,7 @@ export const getRestaurants = async (req, res, next) => {
   }
 };
 
-// ✅ PUBLIC - NO AUTH (FIXED - removed extra semicolon)
+
 export const getRestaurantMenu = async (req, res, next) => {
   try {
     const menu = await customerService.getRestaurantMenu(req.params.id);
@@ -48,7 +48,7 @@ export const getRestaurantMenu = async (req, res, next) => {
   }
 };
 
-// ✅ PROTECTED - NEEDS TOKEN
+
 export const addToCart = async (req, res, next) => {
   try {
     const result = await customerService.addToCart(req.user.id, req.validatedData);
