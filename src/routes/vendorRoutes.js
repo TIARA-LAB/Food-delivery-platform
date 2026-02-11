@@ -12,19 +12,29 @@ import { logInfo } from '../utils/logger.js';
 const router = Router();
 const vendorController = new VendorController();
 
-
+// ✅ FIXED: Define vendorLimiter BEFORE using it
+const vendorLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per vendor per 15 min
+  message: { 
+    success: false, 
+    message: 'Too many requests. Please try again later.' 
+  },
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false,
+});
 
 const restaurantCreationLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: 1,
+  max: 1, // Only 1 restaurant per vendor
   message: { success: false, message: 'One restaurant per vendor only' }
 });
 
-// MIDDLEWARE ORDER
+// MIDDLEWARE ORDER ✅ FIXED
 router.use(express.json({ limit: '10mb' }));
 router.use(authenticateToken);
 router.use(authorizeRoles('VENDOR'));
-router.use(vendorLimiter);
+router.use(vendorLimiter); // ✅ Now defined above
 
 router.use((req, res, next) => {
   logInfo('Vendor API Access', {
