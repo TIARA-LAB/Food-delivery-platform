@@ -5,14 +5,28 @@ import {
  resendVerification,
  verifyEmail
 } from '../controllers/authController.js';
-import { loginLimiter, registerLimiter } from '../utils/rateLimiter.js';
-import { resendVerificationValidation } from '../validation/authValidation.js';
 
 const router = Router();
 
-router.post('/register', registerLimiter, register.validate, register);
-router.post('/login', loginLimiter, login.validate, login);
-router.post('/resend-verification', registerLimiter, resendVerificationValidation, resendVerification);
+// Individual middleware - NO spread operator needed
+router.post('/register',
+ (req, res, next) => { req.body = req.body || {}; next(); },
+ register[1],  // validation middleware
+ register[2]   // handler
+);
+
+router.post('/login',
+ (req, res, next) => { req.body = req.body || {}; next(); },
+ login[1],
+ login[2]
+);
+
+router.post('/resend-verification',
+ (req, res, next) => { req.body = req.body || {}; next(); },
+ resendVerification[1],
+ resendVerification[2]
+);
+
 router.get('/verify-email', verifyEmail);
 
 export default router;

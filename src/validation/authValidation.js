@@ -2,30 +2,52 @@ import { body } from 'express-validator';
 
 export const registerValidation = [
   body('email')
+    .trim()
+    .notEmpty()
     .isEmail()
     .normalizeEmail()
-    .withMessage('Valid email required'),
+    .withMessage('Please enter a valid email address'),
+
   body('password')
-    .isLength({ min: 8 })
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/)
-    .withMessage('Password: 8+ chars, 1 upper, 1 lower, 1 number'),
-  body('name')
-    .notEmpty()
     .trim()
+    .notEmpty()
+    .isLength({ min: 8 })
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Password must be 8+ characters with 1 uppercase, 1 lowercase, 1 number'),
+
+
+  body('name')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isLength({ min: 2, max: 50 })
     .escape()
-    .isLength({ max: 50 })
-    .withMessage('Name required, max 50 characters'),
+    .withMessage('Name must be 2-50 characters'),
+
   body('role')
     .optional()
     .isIn(['ADMIN', 'VENDOR', 'DELIVERY', 'CUSTOMER'])
-    .withMessage('Invalid role')
+    .withMessage('Invalid role specified')
 ];
 
 export const loginValidation = [
-  body('email').isEmail().normalizeEmail(),
-  body('password').notEmpty().withMessage('Password required')
+  body('email')
+    .trim()
+    .notEmpty()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please enter a valid email'),
+
+  body('password')
+    .trim()
+    .notEmpty()
+    .withMessage('Password is required')
 ];
 
 export const resendVerificationValidation = [
-  body('email').isEmail().normalizeEmail().withMessage('Valid email required')
+  body('email')
+    .trim()
+    .notEmpty()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email required')
 ];
