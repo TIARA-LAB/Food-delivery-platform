@@ -6,7 +6,7 @@ export default class ProductController {
     this.service = service;
   }
 
-  // PUBLIC ROUTES - Single handlers
+  // PUBLIC ROUTES 
   getMany = async (req, res, next) => {
     try {
       const result = await this.service.getMany(req.query);

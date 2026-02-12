@@ -54,6 +54,7 @@ model User {
   reviews         Review[]
   restaurant      Restaurant? @relation("VendorRestaurant")
   deliveries      Delivery[]  @relation("RiderDeliveries")
+  cartItems       CartItem[]  // ← ADDED
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -80,6 +81,22 @@ model Address {
   @@index([userId])
 }
 
+// 🔥 NEW: CART ITEM MODEL (MISSING!)
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String   // ← NOT customerId, matches User model
+  productId String   // ← NOT foodId, matches Product model
+  quantity  Int      @default(1)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId], name: "userId_productId")  // ← REQUIRED for upsert
+  @@map("cart_items")
+    createdAt DateTime @default(now())  
+  updatedAt DateTime @updatedAt 
+}
+
 // RESTAURANT
 model Restaurant {
   id             String               @id @default(uuid())
@@ -88,7 +105,10 @@ model Restaurant {
   name           String
   description    String?
   rating         Float                @default(0)
+  city           String?              // ← ADDED for search
+  phone          String?
   isActive       Boolean              @default(true)
+  averageRating  Float?               // ← ADDED
   schedules      RestaurantSchedule[]
   closures       RestaurantClosure[]
   menuCategories MenuCategory[]
@@ -137,16 +157,18 @@ model MenuCategory {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   name         String
   position     Int       @default(0)
+  products     Product[] // ← ADDED relation
   createdAt    DateTime  @default(now())
 
   @@map("menu_categories")
   @@index([restaurantId])
 }
 
-// PRODUCT -
+// PRODUCT
 model Product {
   id              String       @id @default(uuid())
   restaurantId    String
+  menuCategoryId  String?      // ← ADDED
   name            String       @db.VarChar(255)
   description     String?      @db.Text
   price           Float
@@ -163,11 +185,14 @@ model Product {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  restaurant      Restaurant   @relation(fields: [restaurantId], references: [id])
-  orderItems      OrderItem[]
+  restaurant     Restaurant    @relation(fields: [restaurantId], references: [id])
+  menuCategory   MenuCategory? @relation(fields: [menuCategoryId], references: [id])
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
 
   @@map("products")
   @@index([restaurantId])
+  @@index([menuCategoryId])
   @@index([isActive, isAvailable])
 }
 
@@ -179,7 +204,7 @@ model Order {
   addressId    String
   status       OrderStatus @default(PENDING)
   totalAmount  Float
-  items        OrderItem[]
+  orderItems   OrderItem[]
   payment      Payment?
   delivery     Delivery?
   user         User        @relation(fields: [userId], references: [id])
@@ -198,7 +223,7 @@ model Order {
 model OrderItem {
   id         String   @id @default(uuid())
   orderId    String
-  productId  String
+  productId  String   // ← Changed from foodId
   quantity   Int
   price      Float
 

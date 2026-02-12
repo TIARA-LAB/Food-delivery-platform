@@ -9,7 +9,25 @@ const controller = new ProductController();
 router.get('/', controller.getMany);                 
 router.get('/:id', controller.getOne);               
 
-// VENDOR-ONLY DISCOUNT ROUTES (Auth + Validation FIRST) 
+// ✅ FIXED: Auth BEFORE Validation
+router.post('/', 
+  VendorAuthMiddleware.auth,
+  controller.validateCreate(),  
+  controller.create
+);                   
+
+router.patch('/:id', 
+  VendorAuthMiddleware.auth,
+  controller.validateUpdate(),  
+  controller.update
+);         
+
+router.delete('/:id', 
+  VendorAuthMiddleware.auth,
+  controller.deleteOne
+);         
+
+// DISCOUNT ROUTES
 router.post('/:id/discount', 
   VendorAuthMiddleware.auth,
   controller.validateDiscount(),  
@@ -24,22 +42,7 @@ router.patch('/:id/discount',
 
 router.delete('/:id/discount', 
   VendorAuthMiddleware.auth,
-  controller.removeDiscount );
-
-// PROTECTED ROUTES (Vendor auth applied globally below)
-router.use(VendorAuthMiddleware.auth); 
-
-
-router.post('/', 
-  controller.validateCreate(),  
-  controller.create
-);                   
-
-router.patch('/:id', 
-  controller.validateUpdate(),  
-  controller.update
-);         
-
-router.delete('/:id', controller.deleteOne);         
+  controller.removeDiscount
+);
 
 export default router;

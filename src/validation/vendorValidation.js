@@ -1,230 +1,191 @@
-import {
-  body,
-  param,
-  query,
-  validationResult
-} from 'express-validator';
+import { z } from 'zod';
+
+const RestaurantSchemas = {
+  create: z.object({
+    name: z.string().min(2).max(100),
+    description: z.string().optional()
+  }),
+  
+  update: z.object({
+    name: z.string().min(2).max(100).optional(),
+    description: z.string().max(500).optional(),
+    isActive: z.boolean().optional()
+  })
+};
+
+const ScheduleSchema = z.object({
+  dayOfWeek: z.coerce.number().int().min(0).max(6),
+  opensAt: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'HH:MM format (09:00)'),
+  closesAt: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'HH:MM format (17:00)'),
+  isClosed: z.boolean().optional()
+}).refine(data => data.opensAt < data.closesAt, {
+  message: 'opensAt must be before closesAt',
+  path: ['opensAt']
+});
+
+const MenuSchemas = {
+  createCategory: z.object({
+    name: z.string().min(2).max(50),
+    position: z.coerce.number().int().min(0).optional()
+  }),
+  
+  createFoodItem: z.object({
+    name: z.string().min(2).max(100),
+    description: z.string().optional(),
+    price: z.coerce.number().min(0.01).max(10000),
+    preparationTime: z.coerce.number().int().min(1).max(120).optional().default(15),
+    imageUrl: z.string().url().optional().or(z.literal('')),
+    position: z.coerce.number().int().min(0).optional()
+  })
+};
+
+const OrderSchemas = {
+  getQuery: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    status: z.string().optional()
+  }),
+  
+  updateStatus: z.object({
+    orderId: z.string().uuid(),
+    status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED'])
+  })
+};
+
+const AnalyticsSchema = z.object({
+  fromDate: z.string().datetime().optional(),
+  toDate: z.string().datetime().optional()
+});
 
 export class VendorValidation {
-  // RESTAURANT OPERATIONS
-static createRestaurantValidation() {
-    return [
-      body('name')
-        .trim()
-        .notEmpty()
-        .withMessage('Restaurant name is required')
-        .isLength({ min: 2, max: 100 })
-        .withMessage('Name must be 2-100 characters'),
-      
-      body('description')
-        .optional()
-        .trim()
-        .isLength({ min: 1, max: 500 })
-        .withMessage('Description must be 1-500 characters')
-    ];
+  static sendValidationError(res, issues) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: issues.map(issue => ({
+        field: issue.path.join('.'),
+        message: issue.message,
+        value: issue.received
+      }))
+    });
   }
-   
 
+  // RESTAURANT OPERATIONS
+  static createRestaurantValidation() {
+    return (req, res, next) => {
+      const result = RestaurantSchemas.create.safeParse(req.body);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedBody = result.data; 
+      next();
+    };
+  }
 
   static updateRestaurantValidation() {
-    return [
-      body('name')
-        .optional()
-        .trim()
-        .isLength({ min: 2, max: 100 })
-        .withMessage('Restaurant name must be 2-100 characters')
-        .escape(),
-      body('description')
-        .optional()
-        .trim()
-        .isLength({ max: 500 })
-        .withMessage('Description max 500 characters')
-        .escape(),
-      body('phone')
-        .optional()
-        .isMobilePhone('any')
-        .withMessage('Invalid phone number'),
-      body('address')
-        .optional()
-        .trim()
-        .isLength({ min: 5, max: 200 })
-        .withMessage('Address must be 5-200 characters'),
-      body('city')
-        .optional()
-        .trim()
-        .isLength({ min: 2, max: 100 })
-        .withMessage('City must be 2-100 characters'),
-      body('deliveryRadius')
-        .optional()
-        .isInt({ min: 1, max: 50 })
-        .toInt()
-        .withMessage('Delivery radius 1-50km'),
-      body('deliveryFee')
-        .optional()
-        .isFloat({ min: 0 })
-        .toFloat()
-        .withMessage('Delivery fee >= 0'),
-      body('isActive')
-        .optional()
-        .isBoolean()
-        .toBoolean()
-        .custom((value, { req }) => {
-          if (value && (!req.body.name || req.body.name.trim().length < 2)) {
-            throw new Error('Name required for active restaurants');
-          }
-          return true;
-        })
-    ];
+    return (req, res, next) => {
+      const result = RestaurantSchemas.update.safeParse(req.body);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedBody = result.data;
+      next();
+    };
   }
 
   static toggleRestaurantStatusValidation() {
-    return [
-      body('isActive')
-        .notEmpty()
-        .isBoolean()
-        .toBoolean()
-        .withMessage('isActive must be boolean (true/false)')
-    ];
+    return (req, res, next) => {
+      const result = z.object({ isActive: z.boolean() }).safeParse(req.body);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedBody = result.data;
+      next();
+    };
   }
 
   static getRestaurantValidation() {
-    return []; // No validation needed for GET
+    return (req, res, next) => next();
   }
 
   // SCHEDULE OPERATIONS
   static upsertScheduleValidation() {
-    return [
-      body('dayOfWeek')
-        .notEmpty()
-        .isInt({ min: 0, max: 6 })
-        .toInt()
-        .withMessage('dayOfWeek must be 0-6 (Sunday-Saturday)'),
-      body('opensAt')
-        .notEmpty()
-        .isLength({ min: 5, max: 5 })
-        .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-        .withMessage('opensAt must be HH:MM format (09:00)')
-        .custom((value, { req }) => {
-          if (value && req.body.closesAt && value >= req.body.closesAt) {
-            throw new Error('opensAt must be before closesAt');
-          }
-          return true;
-        }),
-      body('closesAt')
-        .notEmpty()
-        .isLength({ min: 5, max: 5 })
-        .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-        .withMessage('closesAt must be HH:MM format (17:00)'),
-      body('isClosed')
-        .optional()
-        .isBoolean()
-        .toBoolean()
-    ];
+    return (req, res, next) => {
+      const result = ScheduleSchema.safeParse(req.body);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedBody = result.data;
+      next();
+    };
   }
 
   // MENU OPERATIONS
   static createMenuCategoryValidation() {
-    return [
-      body('name')
-        .trim()
-        .notEmpty()
-        .isLength({ min: 2, max: 50 })
-        .withMessage('Category name must be 2-50 characters')
-        .escape(),
-      body('description')
-        .optional()
-        .trim()
-        .isLength({ max: 200 })
-        .escape()
-    ];
+    return (req, res, next) => {
+      const result = MenuSchemas.createCategory.safeParse(req.body);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedBody = result.data;
+      next();
+    };
   }
 
   static createFoodItemValidation() {
-    return [
-      param('categoryId')
-        .isUUID()
-        .withMessage('Valid category UUID required'),
-      body('name')
-        .trim()
-        .notEmpty()
-        .isLength({ min: 2, max: 100 })
-        .withMessage('Item name must be 2-100 characters')
-        .escape(),
-      body('description')
-        .optional()
-        .trim()
-        .isLength({ max: 500 })
-        .escape(),
-      body('price')
-        .notEmpty()
-        .isFloat({ min: 0.01, max: 10000 })
-        .withMessage('Price must be 0.01-10000')
-        .toFloat(),
-      body('preparationTime')
-        .optional()
-        .isInt({ min: 1, max: 120 })
-        .toInt()
-        .withMessage('Preparation time 1-120 minutes'),
-      body('isAvailable')
-        .optional()
-        .isBoolean()
-        .toBoolean()
-    ];
+    return (req, res, next) => {
+      const result = MenuSchemas.createFoodItem.safeParse(req.body);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedBody = result.data;
+      next();
+    };
   }
 
-  // ORDER OPERATIONS
   static getOrdersValidation() {
-    return [
-      query('page')
-        .optional()
-        .isInt({ min: 1 })
-        .toInt(),
-      query('limit')
-        .optional()
-        .isInt({ min: 1, max: 50 })
-        .toInt(),
-      query('status')
-        .optional()
-        .isString()
-    ];
+    return (req, res, next) => {
+      const result = OrderSchemas.getQuery.safeParse(req.query);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedQuery = result.data; 
+      next();
+    };
   }
 
   static updateOrderStatusValidation() {
-    return [
-      param('orderId')
-        .isUUID()
-        .withMessage('Valid order UUID required'),
-      body('status')
-        .notEmpty()
-        .isIn(['PENDING', 'CONFIRMED', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED'])
-        .withMessage('Valid order status required')
-    ];
+    return (req, res, next) => {
+      const result = OrderSchemas.updateStatus.safeParse({
+        orderId: req.params.orderId,
+        status: req.body?.status
+      });
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      next();
+    };
   }
 
-  // ANALYTICS & REPORTS
   static getAnalyticsValidation() {
-    return [
-      query('fromDate')
-        .optional()
-        .isISO8601()
-        .toDate(),
-      query('toDate')
-        .optional()
-        .isISO8601()
-        .toDate()
-    ];
+    return (req, res, next) => {
+      const result = AnalyticsSchema.safeParse(req.query);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedQuery = result.data;
+      next();
+    };
   }
 
   static getReviewsValidation() {
-    return [
-      query('page')
-        .optional()
-        .isInt({ min: 1 })
-        .toInt(),
-      query('limit')
-        .optional()
-        .isInt({ min: 1, max: 50 })
-        .toInt()
-    ];
+    return (req, res, next) => {
+      const result = OrderSchemas.getQuery.safeParse(req.query);
+      if (!result.success) {
+        return VendorValidation.sendValidationError(res, result.error.issues);
+      }
+      req.validatedQuery = result.data; 
+      next();
+    };
   }
 }

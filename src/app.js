@@ -42,7 +42,6 @@ app.use((req, res, next) => {
   next(err);
 });
 
-// ✅ GLOBAL ERROR HANDLER - LAST (use handleError)
 app.use(handleError);  
 const port = config.port || 3000;
 logInfo(`Server starting on port ${port}`);

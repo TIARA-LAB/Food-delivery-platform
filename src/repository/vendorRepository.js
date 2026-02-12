@@ -1,5 +1,5 @@
 import prisma from '../config/db.js';
-import { logError } from '../utils/logger.js';
+import { logError, logInfo } from '../utils/logger.js';
 
 export class VendorRepository {
   constructor() {}
@@ -11,344 +11,271 @@ export class VendorRepository {
     };
   }
 
-  validateTime(timeStr) {
-    if (!timeStr || typeof timeStr !== 'string') return false;
-    const [hours, minutes] = timeStr.split(':');
-    const h = parseInt(hours, 10);
-    const m = parseInt(minutes, 10);
-    return h >= 0 && h <= 23 && m >= 0 && m <= 59;
-  }
-
-  validateInput(data, rules) {
-    for (const [field, validators] of Object.entries(rules)) {
-      if (data[field] !== undefined && data[field] !== null) {
-        if (validators.min !== undefined && data[field] < validators.min) {
-          throw new Error(`${field} must be at least ${validators.min}`);
-        }
-        if (validators.max !== undefined && data[field] > validators.max) {
-          throw new Error(`${field} must be at most ${validators.max}`);
-        }
-        if (validators.minLength !== undefined && data[field].length < validators.minLength) {
-          throw new Error(`${field} must be at least ${validators.minLength} characters`);
-        }
-      }
-    }
-  }
-
   async getVendorById(vendorId) {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: vendorId },
-        select: { 
-          id: true, 
-          email: true, 
-          role: true,
-          isActive: true 
-        }
-      });
-
-      if (!user) {
-        logError(`User not found: ${vendorId}`);
-        throw new Error('VENDOR_NOT_FOUND');
-      }
-
-      if (user.role !== 'VENDOR' && user.role !== 2) {
-        logError(`User not vendor: ${vendorId}, role: ${user.role}`);
-        throw new Error('VENDOR_NOT_FOUND');
-      }
-
-      return {
-        id: user.id,
-        email: user.email,
-        isActive: user.isActive ?? true
-      };
-    } catch (error) {
-      logError(`getVendorById failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
-  }
-
-  async validateVendorRestaurant(vendorId, restaurantId) {
     const user = await prisma.user.findUnique({
       where: { id: vendorId },
-      select: { role: true }
+      select: { id: true, email: true, role: true, isActive: true }
     });
 
-    if (!user || (user.role !== 'VENDOR' && user.role !== 2)) {
-      logError(`Vendor access denied - invalid role: vendorId=${vendorId}`);
-      throw new Error('UNAUTHORIZED_RESTAURANT_ACCESS');
+    if (!user || user.role !== 'VENDOR' || !user.isActive) {
+      throw new Error('VENDOR_NOT_FOUND');
     }
 
+    return user;
+  }
+
+  async validateVendorRestaurant(vendorId) {
     const restaurant = await prisma.restaurant.findFirst({
-      where: {
-        vendorId,
-        isActive: true,
-        ...(restaurantId && { id: restaurantId })
-      },
+      where: { vendorId, isActive: true },
       select: { id: true, vendorId: true }
     });
 
-    if (!restaurant || restaurant.vendorId !== vendorId) {
-      logError(`Vendor access denied: vendorId=${vendorId}, restaurantId=${restaurantId}`);
-      throw new Error('Restaurant not found or access denied');
+    if (!restaurant) {
+      throw new Error('RESTAURANT_NOT_FOUND');
     }
+
     return restaurant.id;
   }
 
-  // ✅ FIXED: ONLY Restaurant schema fields (name, description)
-  async createRestaurant(vendorId, data) {
-    try {
-      this.validateInput(data, {
-        name: { minLength: 2, maxLength: 100 },
-        description: { minLength: 1, maxLength: 500 }
-      });
+  async getVendorRestaurant(vendorId) {
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { vendorId },
+      include: {
+        menuCategories: {
+          select: { id: true, name: true, position: true, createdAt: true },
+          orderBy: { position: 'asc' }
+        },
+        products: {
+          where: { isAvailable: true, isActive: true },
+          select: {
+            id: true, name: true, description: true, price: true, image: true,
+            images: true, prepTimeMinutes: true, stockQuantity: true, position: true
+          },
+          orderBy: { position: 'asc' }
+        },
+        schedules: true,
+        closures: { where: { endDate: { gte: new Date() } } }
+      }
+    });
 
-      return await prisma.restaurant.create({
-        data: {
-          vendorId,
-          name: data.name.trim(),
-          description: data.description?.trim() || null
-        }
-      });
-    } catch (error) {
-      logError(`createRestaurant failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
+    if (!restaurant) {
+      throw new Error('RESTAURANT_NOT_FOUND');
     }
+
+    return {
+      ...restaurant,
+      menuWithProducts: this.groupMenuByPosition(restaurant.menuCategories, restaurant.products)
+    };
   }
 
-  async getVendorRestaurant(vendorId) {
-    try {
-      return await prisma.restaurant.findUnique({
-        where: { vendorId },
-        include: {
-          menuCategories: {
-            include: {
-              products: {
-                where: { isAvailable: true, isActive: true },
-                select: {
-                  id: true,
-                  name: true,
-                  description: true,
-                  price: true,
-                  image: true,
-                  isAvailable: true,
-                  prepTimeMinutes: true
-                }
-              }
-            }
-          },
-          schedules: true,
-          closures: { where: { endDate: { gte: new Date() } } }
-        }
-      });
-    } catch (error) {
-      logError(`getVendorRestaurant failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
+  groupMenuByPosition(categories, products) {
+    const grouped = categories.map((category, index) => ({
+      ...category,
+      products: products.slice(index * 4, (index + 1) * 4)
+    }));
+
+    return grouped.length ? grouped : [{ id: 'uncategorized', name: 'All Items', products }];
+  }
+
+  async createRestaurant(vendorId, data) {
+    const existing = await prisma.restaurant.findUnique({ where: { vendorId } });
+    if (existing) {
+      throw new Error('VENDOR_ALREADY_HAS_RESTAURANT');
     }
+
+    return await prisma.restaurant.create({
+      data: {
+        vendorId,
+        name: data.name.trim(),
+        description: data.description?.trim() || null
+      }
+    });
   }
 
   async updateRestaurant(vendorId, data) {
-    try {
-      await this.validateVendorRestaurant(vendorId);
-
-      this.validateInput(data, {
-        name: { minLength: 2, maxLength: 100 },
-        description: { minLength: 1, maxLength: 500 }
-      });
-
-      return await prisma.restaurant.update({
-        where: { vendorId },
-        data: { 
-          name: data.name?.trim(),
-          description: data.description?.trim() || null
-        },
-        include: {
-          menuCategories: {
-            include: {
-              products: {
-                where: { isAvailable: true, isActive: true }
-              }
-            }
-          }
-        }
-      });
-    } catch (error) {
-      logError(`updateRestaurant failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
+    await this.validateVendorRestaurant(vendorId);
+    
+    return await prisma.restaurant.update({
+      where: { vendorId },
+      data: {
+        name: data.name?.trim(),
+        description: data.description?.trim() || null,
+        isActive: data.isActive
+      }
+    });
   }
 
   async toggleRestaurantStatus(vendorId, isActive) {
-    try {
-      await this.validateVendorRestaurant(vendorId);
-      return await prisma.restaurant.update({
-        where: { vendorId },
-        data: { isActive }
-      });
-    } catch (error) {
-      logError(`toggleRestaurantStatus failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
+    await this.validateVendorRestaurant(vendorId);
+    
+    const activeOrders = await prisma.order.count({
+      where: {
+        restaurant: { vendorId },
+        status: { in: ['PENDING', 'CONFIRMED', 'PREPARING', 'ON_THE_WAY'] }
+      }
+    });
+
+    if (!isActive && activeOrders > 0) {
+      throw new Error('CANNOT_CLOSE_WITH_ACTIVE_ORDERS');
     }
+
+    return await prisma.restaurant.update({
+      where: { vendorId },
+      data: { isActive }
+    });
   }
 
   async upsertSchedule(vendorId, scheduleData) {
-    try {
-      if (scheduleData.dayOfWeek < 0 || scheduleData.dayOfWeek > 6) {
-        throw new Error('INVALID_DAY_OF_WEEK');
-      }
-      if (!this.validateTime(scheduleData.opensAt)) {
-        throw new Error('INVALID_TIME_FORMAT');
-      }
-      if (!this.validateTime(scheduleData.closesAt)) {
-        throw new Error('INVALID_TIME_FORMAT');
-      }
+    const restaurantId = await this.validateVendorRestaurant(vendorId);
 
-      const restaurantId = await this.validateVendorRestaurant(vendorId);
-
-      return await prisma.restaurantSchedule.upsert({
-        where: {
-          restaurantId_dayOfWeek: {
-            restaurantId,
-            dayOfWeek: scheduleData.dayOfWeek
-          }
-        },
-        update: scheduleData,
-        create: {
+    return await prisma.restaurantSchedule.upsert({
+      where: {
+        restaurantId_dayOfWeek: {
           restaurantId,
-          ...scheduleData
+          dayOfWeek: scheduleData.dayOfWeek
         }
-      });
-    } catch (error) {
-      logError(`upsertSchedule failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
+      },
+      update: scheduleData,
+      create: {
+        restaurantId,
+        ...scheduleData
+      }
+    });
   }
 
   async createMenuCategory(vendorId, data) {
-    try {
-      this.validateInput(data, { name: { minLength: 2, maxLength: 50 } });
-      const restaurantId = await this.validateVendorRestaurant(vendorId);
-
-      return await prisma.menuCategory.create({
-        data: {
-          restaurantId,
-          name: data.name.trim(),
-          description: data.description?.trim() || null
-        }
-      });
-    } catch (error) {
-      logError(`createMenuCategory failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
+    const restaurantId = await this.validateVendorRestaurant(vendorId);
+    
+    const categoryCount = await prisma.menuCategory.count({ where: { restaurantId } });
+    if (categoryCount >= 20) {
+      throw new Error('MAX_CATEGORIES_REACHED');
     }
+
+    return await prisma.menuCategory.create({
+      data: {
+        restaurantId,
+        name: data.name.trim(),
+        position: data.position || 0
+      }
+    });
   }
 
-  async createFoodItem(vendorId, categoryId, data) {
-    try {
-      this.validateInput(data, {
-        name: { minLength: 2, maxLength: 100 },
-        price: { min: 0.01, max: 10000 },
-        prepTimeMinutes: { min: 1, max: 120 }
-      });
+  async createFoodItem(vendorId, data) {
+    const restaurantId = await this.validateVendorRestaurant(vendorId);
 
-      const category = await prisma.menuCategory.findFirst({
-        where: {
-          id: categoryId,
-          restaurant: { vendorId }
+    return await prisma.product.create({
+      data: {
+        restaurantId,
+        name: data.name.trim(),
+        description: data.description?.trim() || null,
+        price: data.price,
+        image: data.imageUrl || null,
+        prepTimeMinutes: data.preparationTime || 15,
+        position: data.position || 0,
+        isAvailable: true,
+        isActive: true
+      }
+    });
+  }
+
+  async getVendorOrders(vendorId, pagination) {
+    const { page, limit } = this.sanitizePagination(pagination);
+    const skip = (page - 1) * limit;
+
+    const [orders, totalCount] = await Promise.all([
+      prisma.order.findMany({
+        where: { restaurant: { vendorId } },
+        include: {
+          user: { select: { id: true, name: true, phone: true } },
+          address: { select: { label: true, city: true, street: true } },
+          items: { include: { product: true } },
+          payment: true,
+          delivery: true
         },
-        select: { id: true }
-      });
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit
+      }),
+      prisma.order.count({ where: { restaurant: { vendorId } } })
+    ]);
 
-      if (!category) throw new Error('CATEGORY_NOT_FOUND');
-
-      return await prisma.product.create({
-        data: {
-          categoryId,
-          restaurantId: (await this.validateVendorRestaurant(vendorId)),
-          name: data.name.trim(),
-          description: data.description?.trim() || null,
-          price: data.price,
-          image: data.imageUrl || null,
-          prepTimeMinutes: data.preparationTime || 15,
-          isAvailable: true,
-          isActive: true
-        }
-      });
-    } catch (error) {
-      logError(`createFoodItem failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
-  }
-
-  async getVendorOrders(vendorId, pagination = {}, status) {
-    try {
-      const { page, limit } = this.sanitizePagination(pagination);
-      const skip = (page - 1) * limit;
-
-      const [orders, totalCount] = await Promise.all([
-        prisma.order.findMany({
-          where: {
-            restaurant: { vendorId },
-            ...(status && { status: { in: status } })
-          },
-          include: {
-            user: { select: { id: true, name: true, phone: true } },
-            address: {
-              select: { label: true, city: true, street: true, latitude: true, longitude: true }
-            },
-            items: {
-              include: { product: true }
-            },
-            payment: true,
-            delivery: true
-          },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit
-        }),
-        prisma.order.count({
-          where: {
-            restaurant: { vendorId },
-            ...(status && { status: { in: status } })
-          }
-        })
-      ]);
-
-      return {
-        data: orders,
-        pagination: {
-          page,
-          limit,
-          total: totalCount,
-          totalPages: Math.ceil(totalCount / limit),
-          hasNext: page < Math.ceil(totalCount / limit),
-          hasPrev: page > 1
-        }
-      };
-    } catch (error) {
-      logError(`getVendorOrders failed: vendorId=${vendorId}`, { error: error.message });
-      throw error;
-    }
+    return {
+      data: orders,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasNext: page < Math.ceil(totalCount / limit),
+        hasPrev: page > 1
+      }
+    };
   }
 
   async updateOrderStatus(vendorId, orderId, status) {
-    try {
-      const result = await prisma.order.updateMany({
-        where: {
-          id: orderId,
-          restaurant: { vendorId }
-        },
-        data: { status }
-      });
+    const result = await prisma.order.updateMany({
+      where: { id: orderId, restaurant: { vendorId } },
+      data: { status }
+    });
 
-      if (result.count === 0) {
-        throw new Error('ORDER_NOT_FOUND');
-      }
-
-      return { success: true, count: result.count };
-    } catch (error) {
-      logError(`updateOrderStatus failed:
-  vendorId=${vendorId}, orderId=${orderId}, status=${status}`, { error: error.message });
-      throw error;
+    if (result.count === 0) {
+      throw new Error('ORDER_NOT_FOUND');
     }
+
+    return { success: true, count: result.count };
+  }
+
+  async getVendorAnalytics(vendorId, fromDate, toDate) {
+    return {
+      totalOrders: 0,
+      totalRevenue: 0,
+      avgRating: 0,
+      period: { fromDate, toDate }
+    };
+  }
+
+  async getReviews(vendorId, pagination) {
+    const { page, limit } = this.sanitizePagination(pagination);
+    const skip = (page - 1) * limit;
+
+    const [reviews, totalCount] = await Promise.all([
+      prisma.review.findMany({
+        where: { restaurantId: vendorId },
+        include: { user: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit
+      }),
+      prisma.review.count({ where: { restaurantId: vendorId } })
+    ]);
+
+    return {
+      data: reviews,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      }
+    };
+  }
+
+  async getActiveDeliveries(vendorId) {
+    return await prisma.delivery.findMany({
+      where: {
+        order: {
+          restaurant: { vendorId },
+          status: { notIn: ['DELIVERED', 'CANCELLED'] }
+        }
+      },
+      include: {
+        order: {
+          include: {
+            user: { select: { name: true, phone: true } },
+            restaurant: { select: { name: true } }
+          }
+        }
+      }
+    });
   }
 }
