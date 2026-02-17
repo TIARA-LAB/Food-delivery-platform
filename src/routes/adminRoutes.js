@@ -8,7 +8,7 @@ let controller;
 try {
   controller = new AdminController();
 } catch (error) {
-  console.error('🚨 AdminController instantiation failed:', error);
+  console.error('AdminController instantiation failed:', error);
   process.exit(1);
 }
 

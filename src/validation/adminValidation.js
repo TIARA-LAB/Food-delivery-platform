@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-// Base pagination schema
 export const paginationSchema = z.object({
   query: z.object({
     page: z.coerce.number().min(1).default(1),

@@ -5,7 +5,7 @@ import { logError } from '../utils/logger.js';
 
 export const adminAuth = async (req, res, next) => {
   try {
-    // Extract token safely
+
     const authHeader = req.header('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new AppError('No valid Bearer token provided', 401);
@@ -13,7 +13,7 @@ export const adminAuth = async (req, res, next) => {
     
     const token = authHeader.slice(7);
     
-    // Use JWT_ACCESS_SECRET (matches your authenticateToken)
+    
     const secret = process.env.JWT_ACCESS_SECRET;
     if (!secret) {
       logError('JWT_ACCESS_SECRET missing');
@@ -24,15 +24,14 @@ export const adminAuth = async (req, res, next) => {
     if (!decoded.id) {
       throw new AppError('Invalid token payload', 401);
     }
-
-    // FIXED: Use isActive instead of status (matches your schema)
+   
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
       select: { 
         id: true, 
         email: true, 
         role: true,
-        isActive: true  // ← CHANGED from status
+        isActive: true 
       }
     });
 
@@ -40,7 +39,7 @@ export const adminAuth = async (req, res, next) => {
       throw new AppError('User not found', 404);
     }
 
-    if (!user.isActive) {  // ← CHANGED from user.status !== 'ACTIVE'
+    if (!user.isActive) {  
       throw new AppError('Account inactive', 403);
     }
 

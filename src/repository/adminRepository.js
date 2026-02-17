@@ -1,4 +1,3 @@
-// AdminRepository.js - COMPLETE CORRECTED FILE
 import prisma from '../config/db.js';
 
 export default class AdminRepository {
@@ -182,7 +181,7 @@ export default class AdminRepository {
     };
   }
 
-  // ✅ FIXED: Changed 'customer' to 'user' + Added pagination count
+  
   async getVendorOrders(vendorId, { page = 1, limit = 10 }) {
     const skip = (page - 1) * limit;
     return prisma.order.findMany({
@@ -191,7 +190,7 @@ export default class AdminRepository {
       take: limit,
       include: {
         user: { 
-          select: { name: true, phone: true }  // ✅ FIXED: Use 'user' not 'customer'
+          select: { name: true, phone: true }  
         },
         restaurant: { 
           select: { name: true } 
@@ -221,7 +220,7 @@ export default class AdminRepository {
         skip,
         take: limit,
         include: {
-          user: { select: { name: true } },  // ✅ Uses correct 'user' field
+          user: { select: { name: true } },  
           restaurant: { select: { name: true } }
         },
         orderBy: { createdAt: 'desc' }
