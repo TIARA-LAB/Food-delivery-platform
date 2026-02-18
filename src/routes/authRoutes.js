@@ -8,7 +8,6 @@ import {
 
 const router = Router();
 
-// Individual middleware - NO spread operator needed
 router.post('/register',
  (req, res, next) => { req.body = req.body || {}; next(); },
  register[1],  // validation middleware
