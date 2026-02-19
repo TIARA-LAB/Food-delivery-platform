@@ -43,11 +43,3 @@ export const loginValidation = [
     .withMessage('Password is required')
 ];
 
-export const resendVerificationValidation = [
-  body('email')
-    .trim()
-    .notEmpty()
-    .isEmail()
-    .normalizeEmail()
-    .withMessage('Valid email required')
-];

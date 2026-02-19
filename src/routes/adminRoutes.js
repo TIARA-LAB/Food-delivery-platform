@@ -12,16 +12,18 @@ try {
   process.exit(1);
 }
 
-router.use(adminAuth); 
+// PUBLIC LOGIN 
+router.post('/login', controller.adminLogin.bind(controller)); 
 
-router.get('/dashboard', controller.dashboard.bind(controller));
-router.get('/users', controller.getUsers.bind(controller));
-router.patch('/users/:id/role', controller.updateUserRole.bind(controller));
-router.get('/vendors', controller.getVendors.bind(controller));
-router.patch('/vendors/:id/approve', controller.approveVendor.bind(controller));
-router.get('/customers', controller.getCustomers.bind(controller));
-router.get('/analytics', controller.getAnalytics.bind(controller));
-router.get('/vendor-orders/:vendorId', controller.getVendorOrders.bind(controller));
-router.get('/reviews', controller.getReviews.bind(controller));
+//  PROTECTED ROUTES 
+router.get('/dashboard', adminAuth, controller.dashboard.bind(controller));
+router.get('/users', adminAuth, controller.getUsers.bind(controller));
+router.patch('/users/:id/role', adminAuth, controller.updateUserRole.bind(controller));
+router.get('/vendors', adminAuth, controller.getVendors.bind(controller));
+router.patch('/vendors/:id/approve', adminAuth, controller.approveVendor.bind(controller));
+router.get('/customers', adminAuth, controller.getCustomers.bind(controller));
+router.get('/analytics', adminAuth, controller.getAnalytics.bind(controller));
+router.get('/vendor-orders/:vendorId', adminAuth, controller.getVendorOrders.bind(controller));
+router.get('/reviews', adminAuth, controller.getReviews.bind(controller));
 
 export default router;

@@ -106,11 +106,7 @@ export class CustomerRepository {
         where: { id: restaurantId },
         include: {
           menuCategories: {
-            select: {
-              id: true,
-              name: true,
-              position: true
-            },
+            orderBy: { position: 'asc' },
             include: {
               products: {
                 where: { isActive: true, isAvailable: true },
@@ -133,7 +129,6 @@ export class CustomerRepository {
     }
   }
 
-  // 🔥 FIXED: Matches your NEW schema exactly
   async addToCart(userId, productId, quantity) {
     if (!userId || !productId) {
       throw new AppError('User ID and Product ID required', 400);
@@ -152,25 +147,25 @@ export class CustomerRepository {
 
       return await prisma.cartItem.upsert({
         where: { 
-          userId_productId: {  // ← FIXED: Matches schema @@unique name
+          userId_productId: {  
             userId, 
             productId 
           } 
         },
         update: { quantity: { increment: Number(quantity) } },
         create: { 
-          userId,        // ← FIXED: Not customerId
-          productId,     // ← FIXED: Not foodId
+          userId,        
+          productId,     
           quantity: Number(quantity) 
         },
         include: {
-          product: {     // ← FIXED: Not food
+          product: {     
             select: { id: true, name: true, price: true }
           }
         }
       });
     } catch (error) {
-      console.error('🛒 addToCart PRISMA ERROR:', {
+      console.error(' addToCart PRISMA ERROR:', {
         error: error.message,
         code: error.code,
         userId,
@@ -209,8 +204,7 @@ export class CustomerRepository {
               price: true
             }
           }
-        },
-       
+        }
       });
     } catch (error) {
       logError('CustomerRepository.getCart failed', error);
@@ -225,8 +219,8 @@ export class CustomerRepository {
       }
 
       const cartItems = await tx.cartItem.findMany({
-        where: { userId },  // ← FIXED
-        include: { product: { select: { id: true, name: true, price: true } } }  // ← FIXED
+        where: { userId },  
+        include: { product: { select: { id: true, name: true, price: true } } }  
       });
 
       if (cartItems.length === 0) {
@@ -244,7 +238,7 @@ export class CustomerRepository {
       if (!address) throw new AppError('Address not found', 400);
 
       const orderItemsData = cartItems.map(item => ({
-        productId: item.productId,  // ← FIXED
+        productId: item.productId,  
         quantity: item.quantity,
         price: item.product.price
       }));
@@ -257,7 +251,7 @@ export class CustomerRepository {
         orderItemsData.map(item =>
           tx.orderItem.create({
             data: {
-              productId: item.productId,  // ← FIXED
+              productId: item.productId, 
               quantity: item.quantity,
               price: item.price
             }
@@ -289,12 +283,12 @@ export class CustomerRepository {
           address: true,
           payment: true,
           orderItems: {
-            include: { product: { select: { name: true, price: true } } }  // ← FIXED
+            include: { product: { select: { name: true, price: true } } }  
           }
         }
       });
 
-      await tx.cartItem.deleteMany({ where: { userId } });  // ← FIXED
+      await tx.cartItem.deleteMany({ where: { userId } });  
       return order;
     });
   }

@@ -91,7 +91,7 @@ export default class AdminRepository {
       };
     } catch (error) {
       console.error('Analytics error:', error);
-      return { ordersByVendor: [], topProducts: [] };
+      throw error;
     }
   }
 
@@ -181,7 +181,6 @@ export default class AdminRepository {
     };
   }
 
-  
   async getVendorOrders(vendorId, { page = 1, limit = 10 }) {
     const skip = (page - 1) * limit;
     return prisma.order.findMany({

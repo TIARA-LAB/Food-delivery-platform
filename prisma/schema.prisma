@@ -81,7 +81,7 @@ model Address {
   @@index([userId])
 }
 
-// 🔥 NEW: CART ITEM MODEL (MISSING!)
+// NEW: CART ITEM MODEL (MISSING!)
 model CartItem {
   id        String   @id @default(uuid())
   userId    String   // ← NOT customerId, matches User model

@@ -9,7 +9,6 @@ const controller = new ProductController();
 router.get('/', controller.getMany);                 
 router.get('/:id', controller.getOne);               
 
-// ✅ FIXED: Auth BEFORE Validation
 router.post('/', 
   VendorAuthMiddleware.auth,
   controller.validateCreate(),  

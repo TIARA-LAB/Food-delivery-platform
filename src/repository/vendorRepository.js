@@ -188,7 +188,7 @@ export class VendorRepository {
         include: {
           user: { select: { id: true, name: true, phone: true } },
           address: { select: { label: true, city: true, street: true } },
-          items: { include: { product: true } },
+      orderItems: { include: { product: true } },
           payment: true,
           delivery: true
         },

@@ -1,4 +1,3 @@
-// AdminController.js - COMPLETE CORRECTED FILE
 import {
   getUsersSchema,
   updateUserRoleSchema,
@@ -11,6 +10,8 @@ import {
 } from '../validation/adminValidation.js'
 import AdminService from '../service/adminService.js'
 import { AppError } from '../utils/error.js';
+import jwt from 'jsonwebtoken';
+import prisma from '../config/db.js';
 
 export default class AdminController {
   constructor() {
@@ -23,6 +24,66 @@ export default class AdminController {
       message: error.message || 'Internal server error',
       ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
     });
+  }
+
+  //  Admin login 
+  async adminLogin(req, res) {
+    try {
+      const { apiKey } = req.body;
+      
+      if (!apiKey) {
+        throw new AppError('API key required', 400);
+      }
+
+      // Verify admin API key from environment variables
+      const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
+      if (!ADMIN_API_KEY) {
+        throw new AppError('Server configuration error', 500);
+      }
+
+      if (apiKey !== ADMIN_API_KEY) {
+        throw new AppError('Invalid API key', 401);
+      }
+
+      //Create temporary admin user if doesn't exist
+      let adminUser = await prisma.user.findFirst({
+        where: { role: 'ADMIN' }
+      });
+
+      if (!adminUser) {
+        adminUser = await prisma.user.create({
+          data: {
+            email: `platform-admin-${Date.now()}@system.local`,
+            role: 'ADMIN',
+            isActive: true
+          }
+        });
+      }
+
+      // Generate JWT token with admin role
+      const token = jwt.sign(
+        { 
+          id: adminUser.id, 
+          role: adminUser.role,
+          email: adminUser.email 
+        },
+        process.env.JWT_ACCESS_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      res.status(200).json({ 
+        status: 'success', 
+        token,
+        user: { 
+          id: adminUser.id, 
+          email: adminUser.email, 
+          role: adminUser.role 
+        } 
+      });
+
+    } catch (error) {
+      this.#handleError(res, error);
+    }
   }
 
   async getUsers(req, res) {
@@ -111,7 +172,6 @@ export default class AdminController {
       const validated = paginationSchema.safeParse({ query: req.query });
       if (!validated.success) throw new AppError('Invalid pagination', 400);
       
-      // ✅ Validate vendorId
       if (!req.params.vendorId) {
         throw new AppError('Vendor ID required', 400);
       }
