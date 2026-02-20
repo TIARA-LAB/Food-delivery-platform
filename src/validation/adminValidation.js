@@ -1,5 +1,22 @@
 import { z } from 'zod';
 
+export const createUserSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email format').min(1),
+    password: z.string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+        'Password must contain uppercase, lowercase, and number'
+      ),
+    name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+    role: z.enum(['ADMIN', 'VENDOR', 'DELIVERY', 'CUSTOMER'])
+  })
+}).transform((val) => ({
+  query: val.query || {},
+  body: val.body
+}));
+
 export const paginationSchema = z.object({
   query: z.object({
     page: z.coerce.number().min(1).default(1),

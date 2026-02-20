@@ -1,45 +1,57 @@
-import { body } from 'express-validator';
+import { z } from 'zod';
 
-export const registerValidation = [
-  body('email')
-    .trim()
-    .notEmpty()
-    .isEmail()
-    .normalizeEmail()
-    .withMessage('Please enter a valid email address'),
+export const registerSchema = z.object({
+  body: z.object({
+    name: z.string().min(2).max(50),
+    email: z.string().email({ message: "Invalid email address" }),
+    password: z.string().min(8),
+    phone: z.string().optional(),
+    role: z.enum(['CUSTOMER', 'VENDOR', 'RIDER', 'ADMIN'])
+  })
+});
 
-  body('password')
-    .trim()
-    .notEmpty()
-    .isLength({ min: 8 })
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-    .withMessage('Password must be 8+ characters with 1 uppercase, 1 lowercase, 1 number'),
+export const verifyOtpSchema = z.object({
+  body: z.object({
+    email: z.string().email({ message: "Invalid email address" }),
+    otp: z.string().regex(/^\d{6}$/, "OTP must be 6 digits")
+  })
+});
 
+export const loginSchema = z.object({
+  body: z.object({
+    email: z.string().email({ message: "Invalid email address" }),
+    password: z.string()
+  })
+});
 
-  body('name')
-    .optional({ checkFalsy: true })
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .escape()
-    .withMessage('Name must be 2-50 characters'),
+export const refreshSchema = z.object({
+  body: z.object({
+    refreshToken: z.string()
+  })
+});
 
-  body('role')
-    .optional()
-    .isIn(['ADMIN', 'VENDOR', 'DELIVERY', 'CUSTOMER'])
-    .withMessage('Invalid role specified')
-];
-
-export const loginValidation = [
-  body('email')
-    .trim()
-    .notEmpty()
-    .isEmail()
-    .normalizeEmail()
-    .withMessage('Please enter a valid email'),
-
-  body('password')
-    .trim()
-    .notEmpty()
-    .withMessage('Password is required')
-];
-
+export const validate = (schema) => {
+  return (req, res, next) => {
+    try {
+      schema.parse({
+        body: req.body
+      });
+      next();
+    } catch (error) {
+      if (error.name === 'ZodError') {
+        const issues = error.issues.map(issue => ({
+          field: issue.path.join('.'),
+          message: issue.message
+        }));
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: issues
+        });
+      }
+      res.status(400).json({
+        error: 'Validation failed',
+        details: error.message
+      });
+    }
+  };
+};

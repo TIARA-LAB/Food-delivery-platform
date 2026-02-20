@@ -1,6 +1,46 @@
 import prisma from '../config/db.js';
 
 export default class AdminRepository {
+  async createUser({ email, password, name, role }) {
+    try {
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email }
+      });
+
+      if (existingUser) {
+        throw new AppError('User with this email already exists', 409);
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 12);
+
+      // Create user
+      return await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          name,
+          role,
+          emailVerified: true  // Auto-verified for admin creation
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          createdAt: true
+        }
+      });
+    } catch (error) {
+      if (error.code === 'P2002') {
+        throw new AppError('Email already exists', 409);
+      }
+      console.error('Create user error:', error);
+      throw new AppError('Failed to create user', 500);
+    }
+  }
+
   async getDashboardStats() {
     try {
       const totalCustomers = await prisma.user.count({ 

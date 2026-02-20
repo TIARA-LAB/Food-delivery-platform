@@ -1,50 +1,98 @@
 import { AuthService } from '../service/authService.js';
-import { AppError } from '../utils/error.js';
-import { logInfo, logError } from '../utils/logger.js';
-import { registerValidation, loginValidation } from '../validation/authValidation.js';
 
-const authService = new AuthService();
-
-export const register = [
-  (req, res, next) => { req.body = req.body || {}; next(); },
-  registerValidation,
-  async (req, res, next) => {
-    try {
-      const { email, password, name, role } = req.body;
-      const result = await authService.register(email, password, name, role);
-      logInfo(`User registered: ${result.user.id}`);
-
-      res.status(201).json({
-        success: true,
-        message: 'Registration successful! Tokens generated.',
-        data: result
-      });
-    } catch (error) {
-      logError('Register error:', { email: req.body?.email, error: error.message });
-      if (error instanceof AppError) return next(error);
-      next(new AppError('Registration failed', 500));
-    }
+export const register = async (req, res) => {
+  try {
+    const result = await AuthService.register(req.body);
+    res.status(result.success ? 201 : 200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
-];
+};
 
-export const login = [
-  (req, res, next) => { req.body = req.body || {}; next(); },
-  loginValidation,
-  async (req, res, next) => {
-    try {
-      const { email, password } = req.body;
-      const result = await authService.login(email, password);
-      logInfo(`User logged in: ${result.user.id}`);
-
-      res.json({
-        success: true,
-        message: 'Login successful',
-        data: result
-      });
-    } catch (error) {
-      logError('Login error:', { error: error.message });
-      if (error instanceof AppError) return next(error);
-      next(new AppError('Login failed', 500));
-    }
+export const verifyOtp = async (req, res) => {
+  try {
+    const result = await AuthService.verifyOtp(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
-];
+};
+
+export const resendOtp = async (req, res) => {
+  try {
+    const result = await AuthService.resendOtp(req.body.email);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const login = async (req, res) => {
+  try {
+    const result = await AuthService.login(req.body);
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+  }
+};
+
+export const refresh = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    const result = await AuthService.refreshToken(refreshToken);
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    await AuthService.logout(req.user.id);
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const getProfile = async (req, res) => {
+  try {
+
+    if (!req.user?.id) {
+      console.error('NO USER ID:', req.user);
+      return res.status(401).json({ 
+        error: 'User not authenticated',
+        success: false 
+      });
+    }
+
+    console.log(' Profile for userId:', req.user.id);
+    const profile = await AuthService.getProfile(req.user.id);
+    res.json({ success: true, data: profile });
+  } catch (error) {
+    console.error('Profile error:', error.message);
+    res.status(404).json({ error: error.message });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ 
+        error: 'User not authenticated',
+        success: false 
+      });
+    }
+
+    const profile = await AuthService.updateProfile(req.user.id, req.body);
+    res.json({ success: true, data: profile });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};

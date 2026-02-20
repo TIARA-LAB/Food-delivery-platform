@@ -46,15 +46,18 @@ model User {
   password        String
   phone           String?     @unique
   role            Role        @default(CUSTOMER)
-  isActive        Boolean     @default(true)
-  refreshToken    String?
+  refreshToken    String?      @db.Text 
   emailVerified   Boolean     @default(false)
+  isActive        Boolean     @default(false)     
+  isPending       Boolean     @default(true)  
+  otpToken       String?      @db.VarChar(10)
+  otpExpiresAt   DateTime?
   addresses       Address[]
   orders          Order[]
   reviews         Review[]
   restaurant      Restaurant? @relation("VendorRestaurant")
   deliveries      Delivery[]  @relation("RiderDeliveries")
-  cartItems       CartItem[]  // ← ADDED
+  cartItems       CartItem[]  
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 

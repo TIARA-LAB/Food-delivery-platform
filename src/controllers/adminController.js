@@ -1,4 +1,5 @@
 import {
+  createUserSchema,
   getUsersSchema,
   updateUserRoleSchema,
   approveVendorSchema,
@@ -24,6 +25,62 @@ export default class AdminController {
       message: error.message || 'Internal server error',
       ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
     });
+  }
+   async createUser(req, res) {
+    try {
+      const validated = createUserSchema.safeParse({
+        body: req.body
+      });
+      
+      if (!validated.success) {
+        throw new AppError('Invalid user data', 400);
+      }
+
+      const { email, password, name, role } = validated.data.body;
+
+      // Only ADMIN can create ADMIN users
+      if (role === 'ADMIN' && req.user.role !== 'ADMIN') {
+        throw new AppError('Only admins can create admin users', 403);
+      }
+
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email }
+      });
+
+      if (existingUser) {
+        throw new AppError('User already exists', 409);
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 12);
+
+      // Create user
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          name,
+          role,
+          emailVerified: true  
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true
+        }
+      });
+
+      res.status(201).json({ 
+        status: 'success',
+        message: `${role} user created successfully`,
+        data: user 
+      });
+
+    } catch (error) {
+      this.#handleError(res, error);
+    }
   }
 
   //  Admin login 

@@ -1,4 +1,3 @@
-// AdminService.js - COMPLETE CORRECTED FILE
 import AdminRepository from '../repository/adminRepository.js';
 
 export default class AdminService {
@@ -6,6 +5,11 @@ export default class AdminService {
     this.repo = new AdminRepository();
   }
 
+  async createUser(data) {
+    return this.repo.createUser(data);
+  }
+
+  // Existing methods (unchanged)
   async getDashboardStats() { 
     return this.repo.getDashboardStats(); 
   }

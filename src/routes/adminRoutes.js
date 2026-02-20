@@ -15,7 +15,8 @@ try {
 // PUBLIC LOGIN 
 router.post('/login', controller.adminLogin.bind(controller)); 
 
-//  PROTECTED ROUTES 
+//  PROTECTED ROUTES
+router.post('/users', adminAuth, controller.createUser.bind(controller));  
 router.get('/dashboard', adminAuth, controller.dashboard.bind(controller));
 router.get('/users', adminAuth, controller.getUsers.bind(controller));
 router.patch('/users/:id/role', adminAuth, controller.updateUserRole.bind(controller));
