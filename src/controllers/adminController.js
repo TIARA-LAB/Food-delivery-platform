@@ -45,9 +45,8 @@ export default class AdminController {
     });
   }
 
-  // ✅ HEADERS AUTHENTICATION - NO MORE req.body issues!
   async adminLogin(req, res) {
-    // ✅ Get API key from headers (3 fallback options)
+
     const adminApiKey = req.header('X-API-Key') || 
                        req.header('Authorization')?.replace('Bearer ', '') || 
                        req.query.apiKey;
