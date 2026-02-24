@@ -5,48 +5,35 @@ export default class AdminService {
     this.repo = new AdminRepository();
   }
 
+  async createSuperAdmin(data) {
+    return this.repo.createSuperAdmin(data);
+  }
+
+  async adminLogin(adminApiKey) {
+    return this.repo.findAdminByApiKey(adminApiKey);
+  }
+
   async createUser(data) {
     return this.repo.createUser(data);
   }
 
-  // Existing methods (unchanged)
-  async getDashboardStats() { 
-    return this.repo.getDashboardStats(); 
+  async getDashboardStats() {
+    return this.repo.getDashboardStats();
   }
-  
-  async getUsers(query) { 
-    return this.repo.getUsers(query); 
+
+  async getUsers(query) {
+    return this.repo.getUsers(query);
   }
-  
-  async getVendors(query) { 
-    return this.repo.getVendors(query); 
+
+  async updateUserRole(userId, role) {
+    return this.repo.updateUserRole(userId, role);
   }
-  
-  async approveVendor(id) { 
-    return this.repo.approveVendor(id); 
+
+  async getVendors(query) {
+    return this.repo.getVendors(query);
   }
-  
-  async updateUserRole(id, role) { 
-    return this.repo.updateUserRole(id, role); 
-  }
-  
-  async getCustomers(query) { 
-    return this.repo.getCustomers(query); 
-  }
-  
-  async getAnalytics(query) { 
-    return this.repo.getAnalytics(query); 
-  }
-  
-  async getVendorOrders(vendorId, query) { 
-    return this.repo.getVendorOrders(vendorId, query); 
-  }
-  
-  async getVendorOrdersCount(vendorId) { 
-    return this.repo.getVendorOrdersCount(vendorId); 
-  }
-  
-  async getReviews(query) { 
-    return this.repo.getReviews(query); 
+
+  async getCustomers(query) {
+    return this.repo.getCustomers(query);
   }
 }

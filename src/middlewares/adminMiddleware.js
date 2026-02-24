@@ -1,75 +1,55 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../config/db.js';
 import { AppError } from '../utils/error.js';
-import { logError } from '../utils/logger.js';
 
 export const adminAuth = async (req, res, next) => {
   try {
-
     const authHeader = req.header('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError('No valid Bearer token provided', 401);
-    }
-    
-    const token = authHeader.slice(7);
-    
-    
-    const secret = process.env.JWT_ACCESS_SECRET;
-    if (!secret) {
-      logError('JWT_ACCESS_SECRET missing');
-      throw new AppError('Server configuration error', 500);
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new AppError('No token provided', 401);
     }
 
-    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
-    if (!decoded.id) {
-      throw new AppError('Invalid token payload', 401);
-    }
-   
+    const token = authHeader.slice(7);
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
       select: { 
         id: true, 
         email: true, 
-        role: true,
-        isActive: true 
+        role: true, 
+        isActive: true,
+        isSuperAdmin: true  
       }
     });
 
-    if (!user) {
-      throw new AppError('User not found', 404);
-    }
-
-    if (!user.isActive) {  
-      throw new AppError('Account inactive', 403);
-    }
-
-    if (user.role !== 'ADMIN') {
+    if (!user || !user.isActive || !['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
       throw new AppError('Admin access required', 403);
     }
 
-    req.user = user;
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isSuperAdmin: user.isSuperAdmin ?? user.role === 'SUPER_ADMIN'  
+    };
+
     next();
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      logError('Admin auth failed - JWT Error', {
-        error: error.name,
-        message: error.message,
-        tokenPrefix: req.header('Authorization')?.substring(0, 20) + '...'
-      });
-    } else {
-      logError('Admin auth failed', error);
-    }
+    throw new AppError(error.message || 'Invalid token', 401);
+  }
+};
 
-    if (error instanceof AppError) {
-      return res.status(error.statusCode).json({
-        status: error.status,
-        message: error.message
-      });
+export const superAdminAuth = async (req, res, next) => {
+  try {
+    await adminAuth(req, res, next);
+    
+    if (!req.user?.isSuperAdmin) {
+      throw new AppError('Super admin access required', 403);
     }
     
-    res.status(401).json({ 
-      status: 'error', 
-      message: 'Invalid token' 
-    });
+    next();
+  } catch (error) {
+    next(error); 
   }
 };

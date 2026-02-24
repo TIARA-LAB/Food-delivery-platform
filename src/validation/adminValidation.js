@@ -1,48 +1,55 @@
 import { z } from 'zod';
 
-export const createUserSchema = z.object({
+const paginationShape = {
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(50).default(10)
+};
+
+export const createSuperAdminSchema = z.object({
   body: z.object({
-    email: z.string().email('Invalid email format').min(1),
+    email: z.string().email('Invalid email format'),
     password: z.string()
       .min(8, 'Password must be at least 8 characters')
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        'Password must contain uppercase, lowercase, and number'
-      ),
-    name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-    role: z.enum(['ADMIN', 'VENDOR', 'DELIVERY', 'CUSTOMER'])
-  })
-}).transform((val) => ({
-  query: val.query || {},
-  body: val.body
-}));
-
-export const paginationSchema = z.object({
-  query: z.object({
-    page: z.coerce.number().min(1).default(1),
-    limit: z.coerce.number().min(1).max(50).default(10)
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password must contain uppercase, lowercase, and number'),
+    name: z.string().min(2, 'Name must be at least 2 characters').max(100)
   })
 });
 
-// Users
-export const getUsersSchema = paginationSchema.extend({
+export const createAdminSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email format'),
+    password: z.string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password must contain uppercase, lowercase, and number'),
+    name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+    role: z.enum(['ADMIN', 'SUPER_ADMIN'])
+  })
+});
+
+// BACKWARD COMPATIBILITY
+export { createAdminSchema as createUserSchema };
+
+export const getUsersSchema = z.object({
   query: z.object({
-    role: z.enum(['CUSTOMER', 'VENDOR', 'RIDER', 'ADMIN']).optional(),
-    status: z.enum(['ACTIVE', 'INACTIVE']).optional()
+    ...paginationShape,
+    role: z.enum(['CUSTOMER', 'ADMIN', 'SUPER_ADMIN', 'VENDOR', 'RIDER']).optional(),
+    isActive: z.enum(['true', 'false']).optional(),
+    isPending: z.enum(['true', 'false']).optional()
   })
 });
 
 export const updateUserRoleSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({
-    role: z.enum(['CUSTOMER', 'ADMIN', 'VENDOR', 'RIDER'])
+    role: z.enum(['CUSTOMER', 'ADMIN', 'SUPER_ADMIN', 'VENDOR', 'RIDER'])
   })
 });
 
-// Vendors  
-export const getVendorsSchema = paginationSchema.extend({
+export const getVendorsSchema = z.object({
   query: z.object({
-    status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']).optional()
+    ...paginationShape,
+    city: z.string().optional(),
+    isActive: z.enum(['true', 'false']).optional()
   })
 });
 
@@ -50,14 +57,23 @@ export const approveVendorSchema = z.object({
   params: z.object({ id: z.string().uuid() })
 });
 
-// Customers
-export const getCustomersSchema = paginationSchema.extend({
+export const getCustomersSchema = z.object({
   query: z.object({
-    status: z.enum(['ACTIVE', 'INACTIVE', 'BLOCKED']).optional()
+    ...paginationShape,
+    isActive: z.enum(['true', 'false']).optional(),
+    isPending: z.enum(['true', 'false']).optional()
   })
 });
 
-// Analytics
+export const getOrdersSchema = z.object({
+  query: z.object({
+    ...paginationShape,
+    status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED']).optional(),
+    userId: z.string().uuid().optional(),
+    restaurantId: z.string().uuid().optional()
+  })
+});
+
 export const analyticsSchema = z.object({
   query: z.object({
     period: z.enum(['daily', 'weekly', 'monthly']).default('daily'),
@@ -66,10 +82,9 @@ export const analyticsSchema = z.object({
   })
 });
 
-// Reviews
-export const reviewSchema = paginationSchema.extend({
+export const getReviewsSchema = z.object({
   query: z.object({
-    vendorId: z.string().uuid().optional(),
-    status: z.enum(['APPROVED', 'PENDING', 'REJECTED']).optional()
+    ...paginationShape,
+    restaurantId: z.string().uuid().optional()
   })
 });
