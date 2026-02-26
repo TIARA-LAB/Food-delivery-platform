@@ -39,17 +39,17 @@ export default class AdminController {
         "createdAt": superAdmin.createdAt,
         "updatedAt": superAdmin.createdAt,
         "__v": 0,
-        "adminApiKey": superAdmin.apiKey,  
+        "adminApiKey": superAdmin.apikey,  
         "message": "Super admin created successfully"
       }
     });
   }
 
   async adminLogin(req, res) {
-   
+
     const adminApiKey = req.header('X-API-Key') || 
                          req.header('Authorization')?.replace('Bearer ', '') || 
-                         req.query.apiKey;
+                         req.query.apikey;
 
     if (!adminApiKey) {
       throw new AppError('API key required (use X-API-Key header, Authorization: Bearer <key>, or ?apiKey=<key>)', 400);
