@@ -39,18 +39,17 @@ export default class AdminController {
         "createdAt": superAdmin.createdAt,
         "updatedAt": superAdmin.createdAt,
         "__v": 0,
-        "adminApiKey": "274e3257c35396a5a551f009971187f1d480fe87564ebd7c40a471598c02a637",
+        "adminApiKey": superAdmin.apiKey,  
         "message": "Super admin created successfully"
       }
     });
   }
 
-  // ✅ HEADERS AUTHENTICATION - NO MORE req.body issues!
   async adminLogin(req, res) {
-    // ✅ Get API key from headers (3 fallback options)
+   
     const adminApiKey = req.header('X-API-Key') || 
-                       req.header('Authorization')?.replace('Bearer ', '') || 
-                       req.query.apiKey;
+                         req.header('Authorization')?.replace('Bearer ', '') || 
+                         req.query.apiKey;
 
     if (!adminApiKey) {
       throw new AppError('API key required (use X-API-Key header, Authorization: Bearer <key>, or ?apiKey=<key>)', 400);
@@ -105,7 +104,8 @@ export default class AdminController {
         "_id": user.id,
         "enrollments": [],
         "updatedAt": user.createdAt,
-        "__v": 0
+        "__v": 0,
+        "adminApiKey": user.apiKey  
       }
     });
   }
@@ -275,12 +275,13 @@ export default class AdminController {
   }
 
   async regenerateApiKey(req, res) {
-    const newApiKey = await this.service.regenerateApiKey();
+    const { userId } = req.params;  
+    const newApiKey = await this.service.regenerateApiKey(userId);
     res.status(200).json({
       "success": true,
       "message": "API key regenerated successfully",
       "data": {
-        "adminApiKey": newApiKey,
+        "adminApiKey": newApiKey.apiKey,
         "message": "Use this new API key for admin login"
       }
     });
