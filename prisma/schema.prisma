@@ -1,4 +1,4 @@
-// This is your development database.
+
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -8,10 +8,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ENUMS
 enum Role {
   CUSTOMER
   ADMIN
+  SUPER_ADMIN 
   VENDOR
   RIDER
 }
@@ -38,7 +38,6 @@ enum PaymentStatus {
   REFUNDED
 }
 
-// USER
 model User {
   id              String      @id @default(uuid())
   name            String
@@ -46,14 +45,19 @@ model User {
   password        String
   phone           String?     @unique
   role            Role        @default(CUSTOMER)
-  isActive        Boolean     @default(true)
-  refreshToken    String?
+  refreshToken    String?     @db.Text 
   emailVerified   Boolean     @default(false)
+  isActive        Boolean     @default(false)     
+  isPending       Boolean     @default(true)  
+  otpToken        String?     @db.VarChar(10)
+  otpExpiresAt    DateTime?
+  apikey          String?
   addresses       Address[]
   orders          Order[]
   reviews         Review[]
   restaurant      Restaurant? @relation("VendorRestaurant")
   deliveries      Delivery[]  @relation("RiderDeliveries")
+  cartItems       CartItem[]  
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -62,6 +66,8 @@ model User {
   @@index([phone])
   @@index([role])
 }
+
+
 
 // ADDRESS
 model Address {
@@ -80,6 +86,24 @@ model Address {
   @@index([userId])
 }
 
+// CART ITEM MODEL
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())  
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId], name: "userId_productId")
+  @@map("cart_items")
+  @@index([userId])
+  @@index([productId])
+}
+
 // RESTAURANT
 model Restaurant {
   id             String               @id @default(uuid())
@@ -88,7 +112,10 @@ model Restaurant {
   name           String
   description    String?
   rating         Float                @default(0)
+  city           String?
+  phone          String?
   isActive       Boolean              @default(true)
+  averageRating  Float?
   schedules      RestaurantSchedule[]
   closures       RestaurantClosure[]
   menuCategories MenuCategory[]
@@ -100,6 +127,8 @@ model Restaurant {
 
   @@map("restaurants")
   @@index([vendorId])
+  @@index([city])
+  @@index([isActive])
 }
 
 // RESTAURANT SCHEDULE
@@ -114,6 +143,7 @@ model RestaurantSchedule {
 
   @@unique([restaurantId, dayOfWeek])
   @@map("restaurant_schedules")
+  @@index([restaurantId])
 }
 
 // RESTAURANT CLOSURE
@@ -128,6 +158,7 @@ model RestaurantClosure {
 
   @@map("restaurant_closures")
   @@index([restaurantId])
+  @@index([startDate])
 }
 
 // MENU CATEGORY
@@ -137,21 +168,24 @@ model MenuCategory {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   name         String
   position     Int       @default(0)
+  products     Product[]
   createdAt    DateTime  @default(now())
 
   @@map("menu_categories")
   @@index([restaurantId])
+  @@index([position])
 }
 
-// PRODUCT -
+// PRODUCT
 model Product {
   id              String       @id @default(uuid())
   restaurantId    String
+  menuCategoryId  String?
   name            String       @db.VarChar(255)
   description     String?      @db.Text
   price           Float
-  originalPrice   Float?       @db.Float
-  discountPercent Float?       @db.Float
+  originalPrice   Float?
+  discountPercent Float?
   discountExpiry  DateTime?
   image           String?      @db.VarChar(500)
   images          Json?
@@ -163,12 +197,16 @@ model Product {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  restaurant      Restaurant   @relation(fields: [restaurantId], references: [id])
-  orderItems      OrderItem[]
+  restaurant     Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuCategory   MenuCategory? @relation(fields: [menuCategoryId], references: [id], onDelete: SetNull)
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
 
   @@map("products")
   @@index([restaurantId])
+  @@index([menuCategoryId])
   @@index([isActive, isAvailable])
+  @@index([position])
 }
 
 // ORDER SYSTEM
@@ -179,7 +217,7 @@ model Order {
   addressId    String
   status       OrderStatus @default(PENDING)
   totalAmount  Float
-  items        OrderItem[]
+  orderItems   OrderItem[]
   payment      Payment?
   delivery     Delivery?
   user         User        @relation(fields: [userId], references: [id])
@@ -192,6 +230,7 @@ model Order {
   @@index([userId])
   @@index([restaurantId])
   @@index([status])
+  @@index([createdAt])
 }
 
 // ORDER ITEM
@@ -223,6 +262,7 @@ model Payment {
 
   @@map("payments")
   @@index([orderId])
+  @@index([status])
 }
 
 // DELIVERY
@@ -242,16 +282,18 @@ model Delivery {
 
 // REVIEW
 model Review {
-  id           String     @id @default(uuid())
+  id           String   @id @default(uuid())
   userId       String
   restaurantId String
   rating       Int
   comment      String?
+  createdAt    DateTime @default(now())
+
   user         User       @relation(fields: [userId], references: [id])
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
-  createdAt    DateTime   @default(now())
 
   @@map("reviews")
   @@index([userId])
   @@index([restaurantId])
+  @@index([createdAt])
 }

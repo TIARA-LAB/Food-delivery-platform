@@ -1,32 +1,40 @@
-import { Router } from 'express';
+import express from 'express';
 import {
- register,
- login,
- resendVerification,
- verifyEmail
+  registerSchema,
+  verifyOtpSchema,
+  loginSchema,
+  refreshSchema,
+  validate
+} from '../validation/authValidation.js'
+import {
+  registerLimiter,
+  otpLimiter,
+  loginLimiter
+} from '../utils/rateLimiter.js'
+import { authenticateToken } from '../middlewares/authMiddleware.js'
+import {
+  register,
+  verifyOtp,
+  resendOtp,
+  login,
+  refresh,
+  logout,
+  getProfile,
+  updateProfile
 } from '../controllers/authController.js';
 
-const router = Router();
+const router = express.Router();
 
-// Individual middleware - NO spread operator needed
-router.post('/register',
- (req, res, next) => { req.body = req.body || {}; next(); },
- register[1],  // validation middleware
- register[2]   // handler
-);
+// Public routes
+router.post('/register', registerLimiter, validate(registerSchema), register);
+router.post('/verify-otp', otpLimiter, validate(verifyOtpSchema), verifyOtp);
+router.post('/resend-otp', otpLimiter, resendOtp);
+router.post('/login', loginLimiter, validate(loginSchema), login);
+router.post('/refresh', validate(refreshSchema), refresh);
 
-router.post('/login',
- (req, res, next) => { req.body = req.body || {}; next(); },
- login[1],
- login[2]
-);
-
-router.post('/resend-verification',
- (req, res, next) => { req.body = req.body || {}; next(); },
- resendVerification[1],
- resendVerification[2]
-);
-
-router.get('/verify-email', verifyEmail);
+// Protected routes
+router.post('/logout', authenticateToken, logout);
+router.get('/profile', authenticateToken, getProfile);
+router.patch('/profile', authenticateToken, updateProfile);
 
 export default router;

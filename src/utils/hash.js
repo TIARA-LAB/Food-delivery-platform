@@ -1,14 +1,9 @@
-import bcrypt from 'bcrypt';
-
-const SALT_ROUNDS = 12;
+import bcrypt from 'bcryptjs';
 
 export const hashPassword = async (password) => {
- if (!password || password.length < 8) {
-  throw new Error('Password must be at least 8 characters');
- }
- return bcrypt.hash(password, SALT_ROUNDS);
+  return await bcrypt.hash(password, 12);
 };
 
-export const verifyPassword = async (password, hash) => {
- return bcrypt.compare(password, hash);
+export const verifyPassword = async (password, hashedPassword) => {
+  return await bcrypt.compare(password, hashedPassword);
 };
