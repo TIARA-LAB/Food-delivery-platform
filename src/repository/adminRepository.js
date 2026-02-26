@@ -254,7 +254,7 @@ export default class AdminRepository {
     };
   }
 
-  // ✅ MISSING METHODS ADDED
+
   async approveVendor(restaurantId) {
     return prisma.restaurant.update({
       where: { id: restaurantId },
