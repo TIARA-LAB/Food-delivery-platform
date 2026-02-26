@@ -41,7 +41,8 @@ export default class AdminRepository {
         name: true,
         role: true,
         apiKey: true,
-        createdAt: true
+        createdAt: true,
+        isActive: true
       }
     });
   }
@@ -76,8 +77,9 @@ export default class AdminRepository {
         email: true,
         name: true,
         role: true,
-        apiKey: role === 'ADMIN' || role === 'SUPER_ADMIN',
-        createdAt: true
+        apiKey: true,
+        createdAt: true,
+        isActive: true
       }
     });
   }
@@ -98,7 +100,8 @@ export default class AdminRepository {
         email: true,
         name: true,
         role: true,
-        createdAt: true
+        createdAt: true,
+        isActive: true
       }
     });
 
@@ -106,6 +109,19 @@ export default class AdminRepository {
   }
 
   async regenerateApiKey(userId) {
+    // Verify user exists and is admin
+    const user = await prisma.user.findFirst({
+      where: { 
+        id: userId,
+        role: { in: ['ADMIN', 'SUPER_ADMIN'] },
+        isActive: true
+      }
+    });
+
+    if (!user) {
+      throw new AppError('Admin user not found', 404);
+    }
+
     const newApiKey = crypto.randomBytes(32).toString('hex');
     return prisma.user.update({
       where: { id: userId },
@@ -235,6 +251,79 @@ export default class AdminRepository {
     return { 
       data: customers, 
       pagination: { page, limit, total, pages: Math.ceil(total / limit) } 
+    };
+  }
+
+
+  async approveVendor(restaurantId) {
+    return prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: { isActive: true },
+      include: {
+        vendor: {
+          select: { id: true, email: true, name: true }
+        }
+      }
+    });
+  }
+
+  async getAnalytics() {
+    return {
+      totalUsers: await prisma.user.count(),
+      totalOrders: await prisma.order.count(),
+      totalRevenue: await prisma.order.aggregate({
+        where: { status: 'DELIVERED' },
+        _sum: { totalAmount: true }
+      }),
+      avgOrderValue: await prisma.order.aggregate({
+        where: { status: 'DELIVERED' },
+        _avg: { totalAmount: true }
+      })
+    };
+  }
+
+  async getReviews({ page = 1, limit = 10 }) {
+    const skip = (page - 1) * limit;
+    const [reviews, total] = await Promise.all([
+      prisma.review.findMany({
+        skip,
+        take: limit,
+        include: {
+          user: { select: { name: true, email: true } },
+          restaurant: { select: { name: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.review.count()
+    ]);
+
+    return {
+      data: reviews,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    };
+  }
+
+  async getVendorOrders(vendorId, { page = 1, limit = 10 }) {
+    const skip = (page - 1) * limit;
+    const where = { restaurantId: vendorId };
+    
+    const [orders, total] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          customer: { select: { name: true, email: true } },
+          restaurant: { select: { name: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.order.count({ where })
+    ]);
+
+    return {
+      data: orders,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     };
   }
 }

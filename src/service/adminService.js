@@ -36,4 +36,24 @@ export default class AdminService {
   async getCustomers(query) {
     return this.repo.getCustomers(query);
   }
+
+  async approveVendor(id) {
+    return this.repo.approveVendor(id);
+  }
+
+  async getAnalytics() {
+    return this.repo.getAnalytics();
+  }
+
+  async getReviews(query) {
+    return this.repo.getReviews(query || {});
+  }
+
+  async getVendorOrders(vendorId, query) {
+    return this.repo.getVendorOrders(vendorId, query || {});
+  }
+
+  async regenerateApiKey(userId) {
+    return this.repo.regenerateApiKey(userId);
+  }
 }
