@@ -1,4 +1,3 @@
-// This is your development database.
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -8,10 +7,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ENUMS
 enum Role {
   CUSTOMER
   ADMIN
+  SUPER_ADMIN 
   VENDOR
   RIDER
 }
@@ -38,7 +37,13 @@ enum PaymentStatus {
   REFUNDED
 }
 
-// USER
+enum TransactionType {
+  CREDIT
+  DEBIT
+  REFUND
+  ADJUSTMENT
+}
+
 model User {
   id              String      @id @default(uuid())
   name            String
@@ -46,14 +51,20 @@ model User {
   password        String
   phone           String?     @unique
   role            Role        @default(CUSTOMER)
-  isActive        Boolean     @default(true)
-  refreshToken    String?
+  refreshToken    String?     @db.Text 
   emailVerified   Boolean     @default(false)
+  isActive        Boolean     @default(false)     
+  isPending       Boolean     @default(true)  
+  otpToken        String?     @db.VarChar(10)
+  otpExpiresAt    DateTime?
+  apikey          String?
   addresses       Address[]
   orders          Order[]
   reviews         Review[]
   restaurant      Restaurant? @relation("VendorRestaurant")
   deliveries      Delivery[]  @relation("RiderDeliveries")
+  cartItems       CartItem[]  
+  wallet          Wallet?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -63,7 +74,6 @@ model User {
   @@index([role])
 }
 
-// ADDRESS
 model Address {
   id        String   @id @default(uuid())
   userId    String
@@ -80,7 +90,23 @@ model Address {
   @@index([userId])
 }
 
-// RESTAURANT
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())  
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId], name: "userId_productId")
+  @@map("cart_items")
+  @@index([userId])
+  @@index([productId])
+}
+
 model Restaurant {
   id             String               @id @default(uuid())
   vendorId       String               @unique
@@ -88,7 +114,10 @@ model Restaurant {
   name           String
   description    String?
   rating         Float                @default(0)
+  city           String?
+  phone          String?
   isActive       Boolean              @default(true)
+  averageRating  Float?
   schedules      RestaurantSchedule[]
   closures       RestaurantClosure[]
   menuCategories MenuCategory[]
@@ -100,9 +129,10 @@ model Restaurant {
 
   @@map("restaurants")
   @@index([vendorId])
+  @@index([city])
+  @@index([isActive])
 }
 
-// RESTAURANT SCHEDULE
 model RestaurantSchedule {
   id           String     @id @default(uuid())
   restaurantId String
@@ -114,9 +144,9 @@ model RestaurantSchedule {
 
   @@unique([restaurantId, dayOfWeek])
   @@map("restaurant_schedules")
+  @@index([restaurantId])
 }
 
-// RESTAURANT CLOSURE
 model RestaurantClosure {
   id           String     @id @default(uuid())
   restaurantId String
@@ -128,30 +158,32 @@ model RestaurantClosure {
 
   @@map("restaurant_closures")
   @@index([restaurantId])
+  @@index([startDate])
 }
 
-// MENU CATEGORY
 model MenuCategory {
   id           String    @id @default(uuid())
   restaurantId String
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   name         String
   position     Int       @default(0)
+  products     Product[]
   createdAt    DateTime  @default(now())
 
   @@map("menu_categories")
   @@index([restaurantId])
+  @@index([position])
 }
 
-// PRODUCT -
 model Product {
   id              String       @id @default(uuid())
   restaurantId    String
+  menuCategoryId  String?
   name            String       @db.VarChar(255)
   description     String?      @db.Text
-  price           Float
-  originalPrice   Float?       @db.Float
-  discountPercent Float?       @db.Float
+  price           Decimal      @db.Decimal(10, 2)
+  originalPrice   Decimal?
+  discountPercent Float?
   discountExpiry  DateTime?
   image           String?      @db.VarChar(500)
   images          Json?
@@ -163,23 +195,26 @@ model Product {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  restaurant      Restaurant   @relation(fields: [restaurantId], references: [id])
-  orderItems      OrderItem[]
+  restaurant     Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuCategory   MenuCategory? @relation(fields: [menuCategoryId], references: [id], onDelete: SetNull)
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
 
   @@map("products")
   @@index([restaurantId])
+  @@index([menuCategoryId])
   @@index([isActive, isAvailable])
+  @@index([position])
 }
 
-// ORDER SYSTEM
 model Order {
   id           String      @id @default(uuid())
   userId       String
   restaurantId String
   addressId    String
   status       OrderStatus @default(PENDING)
-  totalAmount  Float
-  items        OrderItem[]
+  totalAmount  Decimal     @db.Decimal(10, 2)
+  orderItems   OrderItem[]
   payment      Payment?
   delivery     Delivery?
   user         User        @relation(fields: [userId], references: [id])
@@ -192,15 +227,15 @@ model Order {
   @@index([userId])
   @@index([restaurantId])
   @@index([status])
+  @@index([createdAt])
 }
 
-// ORDER ITEM
 model OrderItem {
   id         String   @id @default(uuid())
   orderId    String
   productId  String
   quantity   Int
-  price      Float
+  price      Decimal  @db.Decimal(10, 2)
 
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product    Product  @relation(fields: [productId], references: [id])
@@ -210,12 +245,11 @@ model OrderItem {
   @@index([productId])
 }
 
-// PAYMENT
 model Payment {
   id        String        @id @default(uuid())
   orderId   String        @unique
   order     Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  amount    Float
+  amount    Decimal       @db.Decimal(10, 2)
   method    PaymentMethod
   status    PaymentStatus @default(PENDING)
   reference String?
@@ -223,9 +257,9 @@ model Payment {
 
   @@map("payments")
   @@index([orderId])
+  @@index([status])
 }
 
-// DELIVERY
 model Delivery {
   id          String   @id @default(uuid())
   orderId     String   @unique
@@ -240,18 +274,54 @@ model Delivery {
   @@index([riderId])
 }
 
-// REVIEW
 model Review {
-  id           String     @id @default(uuid())
+  id           String   @id @default(uuid())
   userId       String
   restaurantId String
   rating       Int
   comment      String?
+  createdAt    DateTime @default(now())
+
   user         User       @relation(fields: [userId], references: [id])
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
-  createdAt    DateTime   @default(now())
 
   @@map("reviews")
   @@index([userId])
   @@index([restaurantId])
+  @@index([createdAt])
+}
+
+model Wallet {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  balance        Decimal  @db.Decimal(10, 2) @default(0.00)
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+
+  @@map("wallets")
+  @@index([userId])
+}
+
+model Transaction {
+  id             String      @id @default(uuid())
+  walletId       String
+  amount         Decimal     @db.Decimal(10, 2)
+  type           TransactionType
+  status         PaymentStatus
+  orderId        String?
+  paymentId      String?
+  description    String?
+  runningBalance Decimal?    @db.Decimal(10, 2)
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  wallet         Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@map("wallet_transactions")
+  @@index([walletId])
+  @@index([walletId, createdAt(sort: Desc)])
 }

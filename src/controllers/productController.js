@@ -30,7 +30,7 @@ export default class ProductController {
       const product = await this.service.getOne(productId);
       res.json({ success: true, data: product });
     } catch (error) {
-      console.error('❌ GET ONE ERROR:', error.message);
+      console.error(' GET ONE ERROR:', error.message);
       next(error);
     }
   };

@@ -24,7 +24,7 @@ const restaurantCreationLimiter = rateLimit({
 router.use(express.json({ limit: '10mb' }));
 router.use(authenticateToken);
 router.use(authorizeRoles('VENDOR'));
-router.use(vendorLimiter);
+//router.use(vendorLimiter);
 
 router.use((req, res, next) => {
   logInfo('Vendor API Access', {
