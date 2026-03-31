@@ -38,6 +38,14 @@ enum PaymentStatus {
   REFUNDED
 }
 
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+  REFUND
+  ADJUSTMENT
+}
+
 model User {
   id              String      @id @default(uuid())
   name            String
@@ -58,6 +66,9 @@ model User {
   restaurant      Restaurant? @relation("VendorRestaurant")
   deliveries      Delivery[]  @relation("RiderDeliveries")
   cartItems       CartItem[]  
+
+  wallet          Wallet?
+
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -70,6 +81,7 @@ model User {
 
 
 // ADDRESS
+
 model Address {
   id        String   @id @default(uuid())
   userId    String
@@ -87,6 +99,7 @@ model Address {
 }
 
 // CART ITEM MODEL
+
 model CartItem {
   id        String   @id @default(uuid())
   userId    String
@@ -104,7 +117,9 @@ model CartItem {
   @@index([productId])
 }
 
+
 // RESTAURANT
+
 model Restaurant {
   id             String               @id @default(uuid())
   vendorId       String               @unique
@@ -131,7 +146,6 @@ model Restaurant {
   @@index([isActive])
 }
 
-// RESTAURANT SCHEDULE
 model RestaurantSchedule {
   id           String     @id @default(uuid())
   restaurantId String
@@ -146,7 +160,6 @@ model RestaurantSchedule {
   @@index([restaurantId])
 }
 
-// RESTAURANT CLOSURE
 model RestaurantClosure {
   id           String     @id @default(uuid())
   restaurantId String
@@ -161,7 +174,6 @@ model RestaurantClosure {
   @@index([startDate])
 }
 
-// MENU CATEGORY
 model MenuCategory {
   id           String    @id @default(uuid())
   restaurantId String
@@ -176,15 +188,22 @@ model MenuCategory {
   @@index([position])
 }
 
+
 // PRODUCT
+
 model Product {
   id              String       @id @default(uuid())
   restaurantId    String
   menuCategoryId  String?
   name            String       @db.VarChar(255)
   description     String?      @db.Text
+
+  price           Decimal      @db.Decimal(10, 2)
+  originalPrice   Decimal?
+
   price           Float
   originalPrice   Float?
+
   discountPercent Float?
   discountExpiry  DateTime?
   image           String?      @db.VarChar(500)
@@ -209,14 +228,17 @@ model Product {
   @@index([position])
 }
 
-// ORDER SYSTEM
 model Order {
   id           String      @id @default(uuid())
   userId       String
   restaurantId String
   addressId    String
   status       OrderStatus @default(PENDING)
+
+  totalAmount  Decimal     @db.Decimal(10, 2)
+
   totalAmount  Float
+
   orderItems   OrderItem[]
   payment      Payment?
   delivery     Delivery?
@@ -233,13 +255,12 @@ model Order {
   @@index([createdAt])
 }
 
-// ORDER ITEM
 model OrderItem {
   id         String   @id @default(uuid())
   orderId    String
   productId  String
   quantity   Int
-  price      Float
+  price      Decimal  @db.Decimal(10, 2)
 
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product    Product  @relation(fields: [productId], references: [id])
@@ -249,12 +270,11 @@ model OrderItem {
   @@index([productId])
 }
 
-// PAYMENT
 model Payment {
   id        String        @id @default(uuid())
   orderId   String        @unique
   order     Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  amount    Float
+  amount    Decimal       @db.Decimal(10, 2)
   method    PaymentMethod
   status    PaymentStatus @default(PENDING)
   reference String?
@@ -265,7 +285,6 @@ model Payment {
   @@index([status])
 }
 
-// DELIVERY
 model Delivery {
   id          String   @id @default(uuid())
   orderId     String   @unique
@@ -280,7 +299,6 @@ model Delivery {
   @@index([riderId])
 }
 
-// REVIEW
 model Review {
   id           String   @id @default(uuid())
   userId       String
@@ -296,4 +314,42 @@ model Review {
   @@index([userId])
   @@index([restaurantId])
   @@index([createdAt])
+
+}
+
+model Wallet {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  balance        Decimal  @db.Decimal(10, 2) @default(0.00)
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+
+  @@map("wallets")
+  @@index([userId])
+
+
+}
+
+model Transaction {
+  id             String      @id @default(uuid())
+  walletId       String
+  amount         Decimal     @db.Decimal(10, 2)
+  type           TransactionType
+  status         PaymentStatus
+  orderId        String?
+  paymentId      String?
+  description    String?
+  runningBalance Decimal?    @db.Decimal(10, 2)
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  wallet         Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@map("wallet_transactions")
+  @@index([walletId])
+  @@index([walletId, createdAt(sort: Desc)])
 }

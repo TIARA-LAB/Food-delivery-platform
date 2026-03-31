@@ -77,4 +77,6 @@ export const validateRequest = (schemaKey) => {
     req.validatedData = result.data;
     next();
   };
+
 };
+
