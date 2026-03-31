@@ -20,7 +20,7 @@ export class CustomerService {
       email: data.email,
       password: hashedPassword,
       name: data.name,
-      phone: data.phone
+      phone: data.phone || null
     });
 
     const token = jwt.sign(
@@ -50,93 +50,159 @@ export class CustomerService {
 
     logInfo('Customer logged in successfully', { customerId: user.id });
     return {
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        name: user.name, 
+        role: user.role 
+      },
       token
     };
   }
 
   async getRestaurants(query = {}) {
-    const { page = 1, limit = 10, city, cuisine, rating } = query;
-    const skip = (page - 1) * Number(limit);
+    const params = {
+      page: Number(query.page) || 1,
+      limit: Math.min(50, Math.max(1, Number(query.limit) || 10)),
+      city: query.city?.trim(),
+      cuisine: query.cuisine?.trim(),
+      search: query.search?.trim(),
+      rating: query.rating
+    };
 
-    const where = { isActive: true };
-    if (city) where.city = { contains: city, mode: 'insensitive' };
-    if (cuisine) where.cuisine = { contains: cuisine, mode: 'insensitive' };
-    if (rating) where.rating = { gte: Number(rating) };
+    const skip = Math.max(0, (params.page - 1) * params.limit);
 
-    const result = await this.repo.findRestaurants({ skip, take: Number(limit), where });
+    const where = {};
+    if (params.city) where.city = params.city;
+    if (params.cuisine) where.cuisine = params.cuisine;
+    if (params.search) where.search = params.search;
+    if (params.rating) where.rating = params.rating;
+
+    console.log('🔍 getRestaurants params:', params);
+
+    const result = await this.repo.findRestaurants({ 
+      skip, 
+      take: params.limit, 
+      where 
+    });
 
     return {
-      restaurants: result.restaurants,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
+      success: true,
+      data: result.data,
+      meta: {
+        ...result.meta,
         total: result.total,
-        pages: Math.ceil(result.total / Number(limit))
+        pages: Math.ceil(result.total / params.limit)
       }
     };
   }
 
   async getRestaurantMenu(restaurantId) {
-    const restaurant = await this.repo.findRestaurantMenu(restaurantId);
-    if (!restaurant?.isActive) throw new AppError('Restaurant not found or inactive', 404);
-
-    return {
-      id: restaurant.id,
-      name: restaurant.name,
-      phone: restaurant.phone || null,
-      rating: restaurant.rating || 0,
-      city: restaurant.city,
-      cuisine: restaurant.cuisine,
-      menu: restaurant.menuCategories?.map(cat => ({
-        id: cat.id,
-        name: cat.name,
-        items: cat.items || []
-      })) || []
-    };
-  }
-
-  async addToCart(customerId, data) {
-    logInfo('Adding item to cart', { customerId, foodId: data.foodId });
-    const result = await this.repo.addToCart(customerId, data.foodId, Number(data.quantity));
-    return { success: true, message: 'Item added to cart successfully', data: result };
-  }
-
-  // Get cart
-  async getCart(customerId) {
-    logInfo('Fetching cart', { customerId });
-    const cartItems = await this.repo.getCart(customerId);
+    if (!restaurantId) throw new AppError('Restaurant ID required', 400);
     
-    const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-    const totalAmount = cartItems.reduce((sum, item) => sum + (item.food.price * item.quantity), 0);
+    const restaurant = await this.repo.findRestaurantMenu(restaurantId);
+    if (!restaurant?.isActive) {
+      throw new AppError('Restaurant not found or inactive', 404);
+    }
 
     return {
-      items: cartItems,
-      summary: {
-        totalItems,
-        totalAmount
+      success: true,
+      data: {
+        id: restaurant.id,
+        name: restaurant.name,
+        phone: restaurant.phone || null,
+        rating: restaurant.averageRating || 0,
+        city: restaurant.city,
+        menu: restaurant.menuCategories?.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          items: cat.products || []  
+        })) || []
       }
     };
   }
 
-  async createOrder(customerId, data) {
-    logInfo('Creating order', { customerId, restaurantId: data.restaurantId });
-    const order = await this.repo.createOrder(customerId, data);
-    return { success: true, message: 'Order placed successfully', data: order };
+  //userId + productId (matches schema)
+  async addToCart(userId, data) {
+    if (!data.productId || !data.quantity) {
+      throw new AppError('Product ID and quantity required', 400);
+    }
+
+    logInfo('Adding item to cart', { 
+      userId, 
+      productId: data.productId, 
+      quantity: data.quantity 
+    });
+    
+    const result = await this.repo.addToCart(
+      userId,           // ← FIXED: was customerId
+      data.productId,   // ← FIXED: was foodId
+      Number(data.quantity)
+    );
+    
+    return { 
+      success: true, 
+      message: 'Item added to cart successfully', 
+      data: result 
+    };
   }
 
-  async getOrders(customerId, query) {
-    const { page = 1, limit = 10 } = query;
-    const skip = (page - 1) * Number(limit);
+  // userId
+  async getCart(userId) {
+    logInfo('Fetching cart', { userId });
+    const cartItems = await this.repo.getCart(userId);
+    
+    const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalAmount = cartItems.reduce((sum, item) => 
+      sum + (item.product.price * item.quantity), 0  
+    );
 
-    const result = await this.repo.getCustomerOrders(customerId, { skip, take: Number(limit) });
     return {
-      orders: result.orders,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
+      success: true,
+      data: {
+        items: cartItems,
+        summary: {
+          totalItems,
+          totalAmount: Number(totalAmount.toFixed(2))
+        }
+      }
+    };
+  }
+
+  // userId
+  async createOrder(userId, data) {
+    logInfo('Creating order', { userId, restaurantId: data.restaurantId });
+    const order = await this.repo.createOrder(userId, data); 
+    
+    return { 
+      success: true, 
+      message: 'Order placed successfully', 
+      data: order 
+    };
+  }
+
+  // userId
+  async getOrders(userId, query) {
+    const params = {
+      page: Number(query.page) || 1,
+      limit: Math.min(50, Math.max(1, Number(query.limit) || 10))
+    };
+    
+    const skip = Math.max(0, (params.page - 1) * params.limit);
+
+    const result = await this.repo.getCustomerOrders(userId, {  
+      skip, 
+      take: params.limit 
+    });
+
+    return {
+      success: true,
+      data: result.data,
+      meta: {
+        page: params.page,
+        limit: params.limit,
         total: result.total,
-        pages: Math.ceil(result.total / Number(limit))
+        pages: Math.ceil(result.total / params.limit)
       }
     };
   }

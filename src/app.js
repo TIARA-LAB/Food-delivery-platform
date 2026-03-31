@@ -6,7 +6,11 @@ import authRoutes from './routes/authRoutes.js';
 import vendorRoutes from './routes/vendorRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
 import productRoutes from './routes/productRoutes.js';
+
 import walletRoutes from './routes/walletRoutes.js'
+
+import adminRoutes from './routes/adminRoutes.js';
+
 import { handleError } from './utils/error.js'; 
 import helmet from 'helmet';
 
@@ -34,7 +38,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/vendor', vendorRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/products', productRoutes);
+
 app.use('/api/wallet',walletRoutes)
+
+app.use('/api/admin',adminRoutes)
+
 
 // 404 handler
 app.use((req, res, next) => {
@@ -44,7 +52,10 @@ app.use((req, res, next) => {
   next(err);
 });
 
+
 //  GLOBAL ERROR HANDLER - LAST (use handleError)
+
+
 app.use(handleError);  
 const port = config.port || 3000;
 logInfo(`Server starting on port ${port}`);

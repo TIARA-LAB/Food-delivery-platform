@@ -6,7 +6,7 @@ export default class ProductController {
     this.service = service;
   }
 
-  // PUBLIC ROUTES - Single handlers
+  // PUBLIC ROUTES 
   getMany = async (req, res, next) => {
     try {
       const result = await this.service.getMany(req.query);
@@ -35,14 +35,14 @@ export default class ProductController {
     }
   };
 
-  // PROTECTED ROUTES - Single handlers (validation in ROUTER)
+  // PROTECTED ROUTES - Single handlers
   create = async (req, res, next) => {
     try {
       const vendorId = req.user?.id;
       if (!vendorId) throw new Error('Vendor not authenticated');
 
-      console.log('CREATING PRODUCT:', req.body);
-      const product = await this.service.create(req.body, vendorId);
+      console.log('CREATING PRODUCT:', req.validatedData || req.body);
+      const product = await this.service.create(req.validatedData || req.body, vendorId);
       res.status(201).json({ success: true, data: product });
     } catch (error) {
       console.error('CREATE ERROR:', error.message);
@@ -63,10 +63,10 @@ export default class ProductController {
         });
       }
 
-      const product = await this.service.update(productId, req.body, vendorId);
+      const product = await this.service.update(productId, req.validatedData || req.body, vendorId);
       res.json({ success: true, data: product });
     } catch (error) {
-      console.error(' UPDATE ERROR:', error.message);
+      console.error('UPDATE ERROR:', error.message);
       next(error);
     }
   };
@@ -92,6 +92,7 @@ export default class ProductController {
     }
   };
 
+  // DISCOUNT OPERATIONS
   addDiscount = async (req, res, next) => {
     try {
       const vendorId = req.user?.id;
@@ -105,33 +106,11 @@ export default class ProductController {
         });
       }
 
-      console.log('ADD DISCOUNT: productId=', productId, 'vendorId=', vendorId);
-      const product = await this.service.addDiscount(productId, req.body, vendorId);
+      console.log('ADD DISCOUNT:', { productId, discountData: req.validatedData || req.body });
+      const product = await this.service.addDiscount(productId, req.validatedData || req.body, vendorId);
       res.json({ success: true, data: product });
     } catch (error) {
       console.error('ADD DISCOUNT ERROR:', error.message);
-      next(error);
-    }
-  };
-
-  removeDiscount = async (req, res, next) => {
-    try {
-      const vendorId = req.user?.id;
-      if (!vendorId) throw new Error('Vendor not authenticated');
-
-      const { id: productId } = req.params;
-      if (!productId || typeof productId !== 'string') {
-        return res.status(400).json({
-          success: false,
-          message: 'Valid product id is required in URL path'
-        });
-      }
-
-      console.log('REMOVE DISCOUNT: productId=', productId, 'vendorId=', vendorId);
-      const product = await this.service.removeDiscount(productId, vendorId);
-      res.json({ success: true, data: product });
-    } catch (error) {
-      console.error(' REMOVE DISCOUNT ERROR:', error.message);
       next(error);
     }
   };
@@ -149,8 +128,8 @@ export default class ProductController {
         });
       }
 
-      console.log('UPDATE DISCOUNT: productId=', productId, 'body=', req.body);
-      const product = await this.service.updateDiscount(productId, req.body, vendorId);
+      console.log('UPDATE DISCOUNT:', { productId, discountData: req.validatedData || req.body });
+      const product = await this.service.updateDiscount(productId, req.validatedData || req.body, vendorId);
       res.json({ success: true, data: product });
     } catch (error) {
       console.error('UPDATE DISCOUNT ERROR:', error.message);
@@ -158,15 +137,37 @@ export default class ProductController {
     }
   };
 
+  removeDiscount = async (req, res, next) => {
+    try {
+      const vendorId = req.user?.id;
+      if (!vendorId) throw new Error('Vendor not authenticated');
+
+      const { id: productId } = req.params;
+      if (!productId || typeof productId !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Valid product id is required in URL path'
+        });
+      }
+
+      const product = await this.service.removeDiscount(productId, vendorId);
+      res.json({ success: true, data: product });
+    } catch (error) {
+      console.error('REMOVE DISCOUNT ERROR:', error.message);
+      next(error);
+    }
+  };
+
+  // VALIDATION METHODS
   validateCreate() {
-    return validateRequest(schemas.create);
+    return validateRequest('create');
   }
 
   validateUpdate() {
-    return validateRequest(schemas.update);
+    return validateRequest('update');
   }
 
   validateDiscount() {
-    return validateRequest(schemas.discount);
+    return validateRequest('discount');
   }
 }
